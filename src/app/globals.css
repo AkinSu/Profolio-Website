@@ -1,0 +1,102 @@
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&display=swap');
+@import "tailwindcss";
+
+:root {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #444;
+}
+
+/* Canvas styling */
+canvas {
+  touch-action: none;
+}
+
+/* Paper intro animations */
+.animate-crumple {
+  animation: crumple 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  transform-origin: center;
+}
+
+.animate-draw {
+  animation: draw-text 0.8s cubic-bezier(0.2, 0.6, 0.2, 1) forwards;
+}
+
+@keyframes draw-text {
+  0% {
+    clip-path: inset(0 100% 0 0);
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes crumple {
+  0% {
+    transform: scale(1) rotate(0deg) translate(0, 0);
+    border-radius: 0;
+    filter: brightness(1);
+    opacity: 1;
+  }
+  30% {
+    transform: scale(0.6) rotate(-5deg) translate(0, 0);
+    border-radius: 20%;
+    filter: brightness(0.8) contrast(1.2);
+    opacity: 1;
+  }
+  60% {
+    transform: scale(0.3) rotate(15deg) translate(20vw, 30vh);
+    border-radius: 40%;
+    filter: brightness(0.6) contrast(1.5);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(0) rotate(45deg) translate(100vw, 100vh);
+    border-radius: 50%;
+    filter: brightness(0.4) contrast(2);
+    opacity: 0;
+  }
+}
