@@ -45,8 +45,10 @@ export default function HomeContent() {
     lastMouseRef.current = { x: e.clientX, y: e.clientY };
 
     // Left boundary: can't pan right past the margin
+    // Top boundary: can't pan past the top edge of the paper (matches top: -2000 on red line)
+    // Bottom boundary: can't pan past the bottom of the red line (top:-2000 + height:5000 = y:3000)
     offsetX.set(Math.min(0, offsetX.get() + dx));
-    offsetY.set(offsetY.get() + dy);
+    offsetY.set(Math.min(2000, Math.max(window.innerHeight - 3000, offsetY.get() + dy)));
 
     // Blue rules background updates via DOM ref — no re-render needed
     if (rulesRef.current) {
@@ -67,7 +69,7 @@ export default function HomeContent() {
       <div
         ref={outerRef}
         style={{
-          minHeight: "100vh",
+          height: "100vh",
           position: "relative",
           overflow: "hidden",
           userSelect: "none",
@@ -86,7 +88,10 @@ export default function HomeContent() {
           ref={rulesRef}
           style={{
             position: "absolute",
-            inset: 0,
+            top: -3000,
+            bottom: -3000,
+            left: 0,
+            right: 0,
             pointerEvents: "none",
             backgroundImage: "repeating-linear-gradient(transparent, transparent 31px, rgba(140,180,220,0.25) 31px, rgba(140,180,220,0.25) 32px)",
             backgroundSize: "100% 32px",
@@ -104,9 +109,7 @@ export default function HomeContent() {
             y: offsetY,
           }}
         >
-          {/* Red margin line — part of the paper, rides with the pan layer.
-              Tall enough (5000px, starting -2000px above) to stay visible
-              no matter how far up or down you pan. */}
+          {/* Red margin line */}
           <div
             style={{
               position: "absolute",
@@ -116,7 +119,21 @@ export default function HomeContent() {
               height: 5000,
               backgroundColor: "rgba(220,80,80,0.3)",
               pointerEvents: "none",
-              zIndex: 0,
+              zIndex: 2,
+            }}
+          />
+
+          {/* Top margin — blank paper area above the first ruled line (7 lines = 224px) */}
+          <div
+            style={{
+              position: "absolute",
+              top: -2000,
+              left: 0,
+              width: 99999,
+              height: 224,
+              backgroundColor: "#f5f5f0",
+              pointerEvents: "none",
+              zIndex: 1,
             }}
           />
 
