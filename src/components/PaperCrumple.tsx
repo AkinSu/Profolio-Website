@@ -67,13 +67,13 @@ export function PaperCrumple({ onComplete }: PaperCrumpleProps) {
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2 }}>
           <svg viewBox="0 0 200 80" style={{ width: "clamp(200px, 30vw, 400px)", overflow: "visible" }}>
             <text x="50%" y="55" textAnchor="middle" style={{
-              fontFamily: "'Caveat', cursive", fontSize: "60px",
+              fontFamily: "'PaperHand', cursive", fontSize: "60px",
               fill: "none", stroke: "#1a1a2e", strokeWidth: 0.6,
               strokeDasharray: 300, strokeDashoffset: 300,
               animation: "write 1.5s ease forwards 0.3s",
             }}>akin</text>
             <text x="50%" y="55" textAnchor="middle" style={{
-              fontFamily: "'Caveat', cursive", fontSize: "60px",
+              fontFamily: "'PaperHand', cursive", fontSize: "60px",
               fill: "#1a1a2e", stroke: "none", opacity: 0,
               animation: "fadeIn 0.4s ease forwards 1.6s",
             }}>akin</text>
@@ -86,7 +86,7 @@ export function PaperCrumple({ onComplete }: PaperCrumpleProps) {
         <div style={{
           position: "absolute", bottom: 40, left: "50%", transform: "translateX(-50%)",
           color: "rgba(100,100,100,0.5)", fontSize: 13,
-          fontFamily: "'Caveat', cursive", letterSpacing: "0.05em",
+          fontFamily: "'PaperHand', cursive", letterSpacing: "0.05em",
           zIndex: 3, animation: "fadeIn 0.5s ease forwards",
         }}>
           click anywhere
