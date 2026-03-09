@@ -31,6 +31,8 @@ export default function HomeContent() {
   const lastMouseRef = useRef({ x: 0, y: 0 });
   const outerRef = useRef<HTMLDivElement>(null);
   const rulesRef = useRef<HTMLDivElement>(null);
+  const [panLimitPos, setPanLimitPos] = useState<{ x: number; y: number } | null>(null);
+
 
   // Disable cartoon cursors when dev menu open or in dev modes
   const disableCursors = devMenuOpen || mode === 'place' || mode === 'text';
@@ -70,6 +72,7 @@ export default function HomeContent() {
     if ((e.target as HTMLElement).closest("button, a, input, textarea")) return;
     if (mode === 'place' || mode === 'text') return;
     if (pencilActiveRef.current) return;
+    e.preventDefault(); // prevent text selection while dragging
     isPanningRef.current = true;
     didPanRef.current = false;
     lastMouseRef.current = { x: e.clientX, y: e.clientY };
@@ -84,8 +87,18 @@ export default function HomeContent() {
 
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) didPanRef.current = true;
 
-    offsetX.set(Math.min(0, offsetX.get() + dx));
-    offsetY.set(Math.min(2000, Math.max(window.innerHeight - 3000, offsetY.get() + dy)));
+    const rawX = offsetX.get() + dx;
+    const rawY = offsetY.get() + dy;
+    const clampedX = Math.min(0, rawX);
+    const clampedY = Math.min(2000, Math.max(window.innerHeight - 3000, rawY));
+    offsetX.set(clampedX);
+    offsetY.set(clampedY);
+
+    if (rawX !== clampedX || rawY !== clampedY) {
+      setPanLimitPos({ x: e.clientX, y: e.clientY });
+    } else {
+      setPanLimitPos(null);
+    }
 
     if (rulesRef.current) {
       rulesRef.current.style.backgroundPosition = `0 ${48 + offsetY.get()}px`;
@@ -94,6 +107,7 @@ export default function HomeContent() {
 
   const handleMouseUp = () => {
     isPanningRef.current = false;
+    setPanLimitPos(null);
     if (outerRef.current) outerRef.current.style.cursor = getCursor();
   };
 
@@ -142,6 +156,29 @@ export default function HomeContent() {
         onMouseLeave={handleMouseUp}
         onClick={handleClick}
       >
+
+        {/* Pan limit indicator */}
+        {panLimitPos && (
+          <div
+            style={{
+              position: 'fixed',
+              left: panLimitPos.x + 20,
+              top: panLimitPos.y - 24,
+              zIndex: 99999,
+              pointerEvents: 'none',
+              userSelect: 'none',
+              fontSize: 22,
+              fontWeight: 900,
+              color: '#dc2626',
+              textShadow: '0 1px 4px rgba(0,0,0,0.15)',
+              fontFamily: 'sans-serif',
+              lineHeight: 1,
+            }}
+          >
+            !
+          </div>
+        )}
+
         <Navigation
           onCursorChange={handleCursorChange}
           disableCursors={disableCursors}
