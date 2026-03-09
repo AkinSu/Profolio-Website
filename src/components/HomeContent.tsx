@@ -1,35 +1,77 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { motion, useMotionValue } from "framer-motion";
 import { Navigation } from "@/components/Navigation";
 import { IntroAnimation } from "@/components/IntroAnimation";
+import { DevButton, CanvasMode } from "@/components/DevButton";
+import { StickyNote } from "@/components/StickyNote";
+import { useStickyNotes } from "@/hooks/useStickyNotes";
+import { CanvasText } from "@/components/CanvasText";
+import { useCanvasTexts } from "@/hooks/useCanvasTexts";
+import { CanvasImage } from "@/components/CanvasImage";
+import { useCanvasImages } from "@/hooks/useCanvasImages";
 
 export default function HomeContent() {
   const [overlayDone, setOverlayDone] = useState(false);
+  const [mode, setMode] = useState<CanvasMode>('pan');
+  const [devMenuOpen, setDevMenuOpen] = useState(false);
+  const [activeCursor, setActiveCursor] = useState<string | null>(null);
+  const pencilActiveRef = useRef(false);
 
-  // MotionValues update the DOM transform directly — zero React re-renders while panning
+  const { notes, addNote, updateNote, lockNote, deleteNote } = useStickyNotes();
+  const { texts, addText, updateText, lockText, deleteText } = useCanvasTexts();
+  const { images, addImage, updateImage, deleteImage } = useCanvasImages();
+
   const offsetX = useMotionValue(0);
   const offsetY = useMotionValue(0);
 
   const isPanningRef = useRef(false);
+  const didPanRef = useRef(false);
   const lastMouseRef = useRef({ x: 0, y: 0 });
   const outerRef = useRef<HTMLDivElement>(null);
   const rulesRef = useRef<HTMLDivElement>(null);
 
-  // Stop pan if mouse leaves window
+  // Disable cartoon cursors when dev menu open or in dev modes
+  const disableCursors = devMenuOpen || mode === 'place' || mode === 'text';
+
+  const handleCursorChange = useCallback((cursor: string | null) => {
+    pencilActiveRef.current = cursor === "pencil";
+    setActiveCursor(cursor);
+  }, []);
+
+  const handleImageUpload = useCallback((file: File) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      // Place image at center of current viewport in canvas coords
+      const cx = -offsetX.get() + window.innerWidth / 2;
+      const cy = -offsetY.get() + window.innerHeight / 2;
+      addImage(url, img.naturalWidth, img.naturalHeight, cx, cy);
+    };
+    img.src = url;
+  }, [addImage, offsetX, offsetY]);
+
+  const getCursor = useCallback(() => {
+    if (mode === 'place' || mode === 'text') return 'crosshair';
+    return 'grab';
+  }, [mode]);
+
   useEffect(() => {
     const stop = () => {
       isPanningRef.current = false;
-      if (outerRef.current) outerRef.current.style.cursor = "grab";
+      if (outerRef.current) outerRef.current.style.cursor = getCursor();
     };
     window.addEventListener("mouseup", stop);
     return () => window.removeEventListener("mouseup", stop);
-  }, []);
+  }, [getCursor]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest("button, a, input")) return;
+    if ((e.target as HTMLElement).closest("button, a, input, textarea")) return;
+    if (mode === 'place' || mode === 'text') return;
+    if (pencilActiveRef.current) return;
     isPanningRef.current = true;
+    didPanRef.current = false;
     lastMouseRef.current = { x: e.clientX, y: e.clientY };
     if (outerRef.current) outerRef.current.style.cursor = "grabbing";
   };
@@ -40,13 +82,11 @@ export default function HomeContent() {
     const dy = e.clientY - lastMouseRef.current.y;
     lastMouseRef.current = { x: e.clientX, y: e.clientY };
 
-    // Left boundary: can't pan right past the margin
-    // Top boundary: can't pan past the top edge of the paper (matches top: -2000 on red line)
-    // Bottom boundary: can't pan past the bottom of the red line (top:-2000 + height:5000 = y:3000)
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) didPanRef.current = true;
+
     offsetX.set(Math.min(0, offsetX.get() + dx));
     offsetY.set(Math.min(2000, Math.max(window.innerHeight - 3000, offsetY.get() + dy)));
 
-    // Blue rules background updates via DOM ref — no re-render needed
     if (rulesRef.current) {
       rulesRef.current.style.backgroundPosition = `0 ${48 + offsetY.get()}px`;
     }
@@ -54,14 +94,38 @@ export default function HomeContent() {
 
   const handleMouseUp = () => {
     isPanningRef.current = false;
-    if (outerRef.current) outerRef.current.style.cursor = "grab";
+    if (outerRef.current) outerRef.current.style.cursor = getCursor();
   };
+
+  const handleClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest("button, a, input, textarea")) return;
+    if (mode === 'place') {
+      // Don't create another note if one is still being edited
+      if (notes.some((n) => n.isEditing)) return;
+      const x = e.clientX - offsetX.get() - 160;
+      const y = e.clientY - offsetY.get() - 20;
+      addNote(x, y);
+    } else if (mode === 'text') {
+      // Don't create another text if one is still being edited
+      if (texts.some((t) => t.isEditing)) return;
+      const x = e.clientX - offsetX.get();
+      const y = e.clientY - offsetY.get();
+      addText(x, y);
+    }
+  };
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMode('pan');
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
 
   return (
     <>
       <IntroAnimation onComplete={() => setOverlayDone(true)} />
 
-      {/* Plain div — no Chakra, no potential CSS containment surprises */}
       <div
         ref={outerRef}
         style={{
@@ -69,17 +133,22 @@ export default function HomeContent() {
           position: "relative",
           overflow: "hidden",
           userSelect: "none",
-          cursor: "grab",
+          cursor: getCursor(),
           backgroundColor: "#f5f5f0",
         }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onClick={handleClick}
       >
-        <Navigation />
+        <Navigation
+          onCursorChange={handleCursorChange}
+          disableCursors={disableCursors}
+        />
+        <DevButton mode={mode} onModeChange={setMode} onOpenChange={setDevMenuOpen} onImageUpload={handleImageUpload} />
 
-        {/* Layer 1: Blue ruled lines — shifts Y only, updated via DOM ref */}
+        {/* Layer 1: Blue ruled lines */}
         <div
           ref={rulesRef}
           style={{
@@ -96,7 +165,7 @@ export default function HomeContent() {
           }}
         />
 
-        {/* Layer 2+3: Pan layer — shifts X and Y together via MotionValues */}
+        {/* Layer 2+3: Pan layer */}
         <motion.div
           style={{
             position: "absolute",
@@ -119,7 +188,7 @@ export default function HomeContent() {
             }}
           />
 
-          {/* Top margin — blank paper area above the first ruled line (7 lines = 224px) */}
+          {/* Top margin */}
           <div
             style={{
               position: "absolute",
@@ -133,6 +202,45 @@ export default function HomeContent() {
             }}
           />
 
+          {/* Canvas images */}
+          {images.map((img) => (
+            <CanvasImage
+              key={img.id}
+              data={img}
+              onUpdate={updateImage}
+              onDelete={deleteImage}
+              disabled={!!activeCursor}
+            />
+          ))}
+
+          {/* Canvas texts */}
+          <div style={{ color: '#292524' }}>
+            {texts.map((t) => (
+              <CanvasText
+                key={t.id}
+                data={t}
+                onUpdate={updateText}
+                onLock={lockText}
+                onDelete={deleteText}
+                disabled={!!activeCursor}
+              />
+            ))}
+          </div>
+
+          {/* Sticky notes — block most interaction when hand/pencil active, but hand can still tilt */}
+          <div style={{ color: '#292524' }}>
+            {notes.map((note) => (
+              <StickyNote
+                key={note.id}
+                note={note}
+                onUpdate={updateNote}
+                onLock={lockNote}
+                onDelete={deleteNote}
+                cursorMode={activeCursor}
+                devMode={devMenuOpen}
+              />
+            ))}
+          </div>
         </motion.div>
       </div>
     </>

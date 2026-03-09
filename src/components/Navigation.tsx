@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Box, Flex, Text, HStack } from "@chakra-ui/react";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -53,7 +53,7 @@ interface HandDrawnButtonProps {
 
 const HandDrawnButton = ({ imageSrc, alt, imageScale = 1, onClick }: HandDrawnButtonProps) => (
   <button
-    style={{ position: "relative", width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center", cursor: "default", outline: "none", zIndex: 10 }}
+    style={{ position: "relative", width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center", outline: "none", zIndex: 10 }}
     className="transition-all duration-150 ease-out drop-shadow-[2px_2px_0_rgba(0,0,0,0.12)] hover:translate-y-px hover:scale-[0.97] active:-translate-y-px active:scale-[1.03]"
     aria-label={alt}
     onClick={onClick}
@@ -85,36 +85,114 @@ const navItems = [
   { name: "Contact", href: "/contact" },
 ];
 
-export function Navigation() {
-  const [cursorImage, setCursorImage] = useState<string | null>(null);
+interface NavigationProps {
+  onCursorChange?: (cursor: string | null) => void;
+  disableCursors?: boolean;
+}
+
+export function Navigation({ onCursorChange, disableCursors }: NavigationProps) {
+  // "hand" is the default cursor mode
+  const [cursorMode, setCursorMode] = useState<string>("hand");
+
+  // When disableCursors becomes true (dev menu), remove custom cursors / use normal mouse
+  useEffect(() => {
+    if (disableCursors) {
+      const styleEl = document.getElementById("custom-cursor-style");
+      styleEl?.remove();
+      onCursorChange?.(null);
+    }
+  }, [disableCursors, onCursorChange]);
+
+  // When disableCursors turns off (dev menu closes), restore hand
+  useEffect(() => {
+    if (!disableCursors) {
+      setCursorMode("hand");
+    }
+  }, [disableCursors]);
+
+  // When window regains focus, reset to hand (unless dev menu is open)
+  useEffect(() => {
+    const resetToHand = () => {
+      if (!disableCursors) {
+        setCursorMode("hand");
+      }
+    };
+    window.addEventListener("focus", resetToHand);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") resetToHand();
+    });
+    return () => {
+      window.removeEventListener("focus", resetToHand);
+    };
+  }, [disableCursors]);
+
+  // Stable ref to avoid re-running effects when onCursorChange identity changes
+  const onCursorChangeRef = useRef(onCursorChange);
+  onCursorChangeRef.current = onCursorChange;
 
   useEffect(() => {
     if (typeof document === "undefined") return;
+    if (disableCursors) return;
 
     let styleEl = document.getElementById("custom-cursor-style") as HTMLStyleElement | null;
 
-    if (cursorImage) {
+    if (cursorMode === "pencil") {
       if (!styleEl) {
         styleEl = document.createElement("style");
         styleEl.id = "custom-cursor-style";
         document.head.appendChild(styleEl);
       }
-      styleEl.textContent = `* { cursor: url(${cursorImage}) 16 16, auto !important; }`;
+      styleEl.textContent = `* { cursor: url(/pencil-cursor.png) 16 16, auto !important; }`;
+      onCursorChangeRef.current?.("pencil");
+    } else if (cursorMode === "hand") {
+      if (!styleEl) {
+        styleEl = document.createElement("style");
+        styleEl.id = "custom-cursor-style";
+        document.head.appendChild(styleEl);
+      }
+      const handCSS = [
+        `* { cursor: url(/hand-default.png) 16 16, auto !important; }`,
+        `button, button *, a, a *, [role="button"], [role="button"] * { cursor: url(/hand-hover.png) 16 16, pointer !important; }`,
+        `button:active, button:active *, a:active, a:active *, [role="button"]:active, [role="button"]:active * { cursor: url(/hand-click.png) 16 16, pointer !important; }`,
+      ].join('\n');
+      styleEl.textContent = handCSS;
+      onCursorChangeRef.current?.("hand");
+
+      // Drag cursor swap listeners
+      const onDown = (e: MouseEvent) => {
+        if ((e.target as HTMLElement).closest("button, a, input, textarea, nav, [role='button']")) return;
+        if (document.documentElement.dataset.tilting) return;
+        styleEl!.textContent = `* { cursor: url(/hand-drag.png) 16 16, grabbing !important; }`;
+      };
+      const onUp = () => {
+        if (document.documentElement.dataset.tilting) return;
+        styleEl!.textContent = handCSS;
+      };
+      window.addEventListener("mousedown", onDown);
+      window.addEventListener("mouseup", onUp);
+
+      return () => {
+        window.removeEventListener("mousedown", onDown);
+        window.removeEventListener("mouseup", onUp);
+        document.getElementById("custom-cursor-style")?.remove();
+      };
     } else {
       styleEl?.remove();
+      onCursorChangeRef.current?.(null);
     }
 
     return () => {
       document.getElementById("custom-cursor-style")?.remove();
     };
-  }, [cursorImage]);
+  }, [cursorMode, disableCursors]);
 
-  const handlePencilClick = () => setCursorImage(prev => prev === "/pencil-cursor.png" ? null : "/pencil-cursor.png");
-  const handleHandClick = () => setCursorImage(prev => prev === "/hand-cursor.png" ? null : "/hand-cursor.png");
+  const handlePencilClick = () => setCursorMode(prev => prev === "pencil" ? "hand" : "pencil");
+  const handleHandClick = () => setCursorMode("hand");
 
   return (
     <MotionBox
       as="nav"
+      className="no-select"
       position="fixed"
       top={0}
       left={0}
