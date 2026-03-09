@@ -1,20 +1,22 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { XIcon, BoldIcon, RotateCwIcon, MoveIcon, AArrowUpIcon } from 'lucide-react';
-import { CanvasTextData, TEXT_COLORS } from '../hooks/useCanvasTexts';
+import { XIcon, BoldIcon, RotateCwIcon, MoveIcon, LinkIcon, AArrowUpIcon } from 'lucide-react';
+import { CanvasTextButtonData, BUTTON_COLORS } from '../hooks/useCanvasButtons';
 
-interface CanvasTextProps {
-  data: CanvasTextData;
-  onUpdate: (id: string, updates: Partial<CanvasTextData>) => void;
+interface CanvasTextButtonProps {
+  data: CanvasTextButtonData;
+  onUpdate: (id: string, updates: Partial<CanvasTextButtonData>) => void;
   onLock: (id: string) => void;
   onDelete: (id: string) => void;
   disabled?: boolean;
+  devMode?: boolean;
 }
 
-export function CanvasText({ data, onUpdate, onLock, onDelete, disabled }: CanvasTextProps) {
+export function CanvasTextButton({ data, onUpdate, onLock, onDelete, disabled, devMode }: CanvasTextButtonProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [showToolbar, setShowToolbar] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dragState = useRef<{
@@ -133,9 +135,16 @@ export function CanvasText({ data, onUpdate, onLock, onDelete, disabled }: Canva
     [data.id, data.fontSize, onUpdate]
   );
 
-  // Click text to show toolbar
   const handleTextClick = () => {
-    if (!data.isEditing) setShowToolbar(true);
+    if (devMode) {
+      setShowToolbar(true);
+      return;
+    }
+    if (!data.isEditing && !showToolbar) {
+      if (data.href) {
+        window.open(data.href, '_blank', 'noopener,noreferrer');
+      }
+    }
   };
 
   const handleDoubleClick = () => {
@@ -145,9 +154,14 @@ export function CanvasText({ data, onUpdate, onLock, onDelete, disabled }: Canva
     }
   };
 
-  const fontWeight = data.bold ? 700 : 400;
+  const handleRightClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!data.isEditing) setShowToolbar(true);
+  };
 
-  // Toolbar button style helper
+  const fontWeight = data.bold ? 700 : 400;
+  const pad = Math.max(6, Math.round(data.fontSize * 0.25));
+
   const tbBtn = (active?: boolean): React.CSSProperties => ({
     width: 26,
     height: 26,
@@ -166,7 +180,7 @@ export function CanvasText({ data, onUpdate, onLock, onDelete, disabled }: Canva
   return (
     <div
       ref={wrapperRef}
-      className="absolute select-none canvas-text-wrapper"
+      className="absolute select-none"
       style={{
         left: data.x,
         top: data.y,
@@ -177,8 +191,9 @@ export function CanvasText({ data, onUpdate, onLock, onDelete, disabled }: Canva
       }}
       onPointerDown={(e) => e.stopPropagation()}
       onDoubleClick={handleDoubleClick}
+      onContextMenu={handleRightClick}
     >
-      {/* Toolbar — visible when editing or when clicked */}
+      {/* Toolbar */}
       {(data.isEditing || showToolbar) && (
         <div
           style={{
@@ -198,113 +213,108 @@ export function CanvasText({ data, onUpdate, onLock, onDelete, disabled }: Canva
             whiteSpace: 'nowrap',
           }}
         >
-          {/* Move handle */}
-          <div
-            onPointerDown={onMoveDown}
-            style={{ ...tbBtn(), cursor: isDragging ? 'grabbing' : 'grab' }}
-            title="Move"
-          >
+          <div onPointerDown={onMoveDown} style={{ ...tbBtn(), cursor: isDragging ? 'grabbing' : 'grab' }} title="Move">
             <MoveIcon style={{ width: 14, height: 14 }} />
           </div>
-
-          {/* Divider */}
           <div style={{ width: 1, height: 18, background: 'rgba(0,0,0,0.1)' }} />
-
-          {/* Bold */}
-          <button
-            onClick={(e) => { e.stopPropagation(); onUpdate(data.id, { bold: !data.bold }); }}
-            style={tbBtn(data.bold)}
-            title="Bold"
-          >
+          <button onClick={(e) => { e.stopPropagation(); onUpdate(data.id, { bold: !data.bold }); }} style={tbBtn(data.bold)} title="Bold">
             <BoldIcon style={{ width: 14, height: 14 }} />
           </button>
-
-          {/* Rotate */}
-          <div
-            onPointerDown={onRotateDown}
-            style={{ ...tbBtn(), cursor: 'grab' }}
-            title="Rotate (drag)"
-          >
+          <div onPointerDown={onRotateDown} style={{ ...tbBtn(), cursor: 'grab' }} title="Rotate (drag)">
             <RotateCwIcon style={{ width: 14, height: 14 }} />
           </div>
-
-          {/* Resize */}
-          <div
-            onPointerDown={onResizeDown}
-            style={{ ...tbBtn(), cursor: 'ew-resize' }}
-            title="Resize (drag)"
-          >
+          <div onPointerDown={onResizeDown} style={{ ...tbBtn(), cursor: 'ew-resize' }} title="Resize (drag)">
             <AArrowUpIcon style={{ width: 14, height: 14 }} />
           </div>
-
-          {/* Divider */}
           <div style={{ width: 1, height: 18, background: 'rgba(0,0,0,0.1)' }} />
-
-          {/* Color dots */}
-          {TEXT_COLORS.map((c) => (
+          {BUTTON_COLORS.map((c) => (
             <button
               key={c}
               onClick={(e) => { e.stopPropagation(); onUpdate(data.id, { color: c }); }}
               style={{
-                width: 16,
-                height: 16,
-                borderRadius: '50%',
-                background: c,
+                width: 16, height: 16, borderRadius: '50%', background: c,
                 border: data.color === c ? '2px solid rgba(0,0,0,0.5)' : '1.5px solid rgba(0,0,0,0.12)',
-                cursor: 'pointer',
-                padding: 0,
-                flexShrink: 0,
+                cursor: 'pointer', padding: 0, flexShrink: 0,
               }}
               title={c}
             />
           ))}
-
-          {/* Divider */}
           <div style={{ width: 1, height: 18, background: 'rgba(0,0,0,0.1)' }} />
-
-          {/* Delete */}
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(data.id); }}
-            style={{ ...tbBtn(), color: '#ef4444' }}
-            title="Delete"
-          >
+          <button onClick={(e) => { e.stopPropagation(); onDelete(data.id); }} style={{ ...tbBtn(), color: '#ef4444' }} title="Delete">
             <XIcon style={{ width: 14, height: 14 }} />
           </button>
         </div>
       )}
 
       {data.isEditing ? (
-        <input
-          ref={inputRef}
-          type="text"
-          value={data.text}
-          onChange={(e) => onUpdate(data.id, { text: e.target.value })}
-          onKeyDown={handleKeyDown}
-          placeholder="Type here..."
-          style={{
-            fontFamily: "'PaperHand', cursive",
-            fontSize: data.fontSize,
-            fontWeight,
-            color: data.color,
-            background: 'transparent',
-            border: 'none',
-            borderBottom: `2px dashed ${data.color}40`,
-            outline: 'none',
-            minWidth: 120,
-            padding: '4px 2px',
-          }}
-        />
-      ) : (
-        <div onClick={handleTextClick} style={{ position: 'relative', cursor: 'pointer' }}>
-          <p
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={data.text}
+            onChange={(e) => onUpdate(data.id, { text: e.target.value })}
+            onKeyDown={handleKeyDown}
+            placeholder="Button text..."
             style={{
               fontFamily: "'PaperHand', cursive",
               fontSize: data.fontSize,
               fontWeight,
               color: data.color,
+              background: 'transparent',
+              border: 'none',
+              borderBottom: `2px dashed ${data.color}40`,
+              outline: 'none',
+              minWidth: 120,
+              padding: '4px 2px',
+            }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <LinkIcon style={{ width: 14, height: 14, color: 'rgba(0,0,0,0.4)', flexShrink: 0 }} />
+            <input
+              type="text"
+              value={data.href}
+              onChange={(e) => onUpdate(data.id, { href: e.target.value })}
+              onKeyDown={handleKeyDown}
+              placeholder="https://..."
+              style={{
+                fontFamily: "monospace",
+                fontSize: 12,
+                color: '#44403c',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: '1px dashed rgba(0,0,0,0.2)',
+                outline: 'none',
+                minWidth: 160,
+                padding: '2px 2px',
+              }}
+            />
+          </div>
+        </div>
+      ) : (
+        <div
+          role="button"
+          onClick={handleTextClick}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          style={{
+            position: 'relative',
+            cursor: data.href ? 'pointer' : 'default',
+            padding: `${pad}px ${pad * 1.5}px`,
+            borderRadius: 4,
+            border: isHovered ? `2px solid ${data.color}` : '2px solid transparent',
+            background: isHovered ? data.color : 'transparent',
+            transition: 'background 0.2s, color 0.2s',
+          }}
+        >
+          <p
+            style={{
+              fontFamily: "'PaperHand', cursive",
+              fontSize: data.fontSize,
+              fontWeight,
+              color: isHovered ? '#f5f5f0' : data.color,
               whiteSpace: 'pre',
               lineHeight: 1.3,
-              padding: '4px 2px',
+              transition: 'color 0.2s',
             }}
           >
             {data.text}

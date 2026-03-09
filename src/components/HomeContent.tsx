@@ -11,6 +11,9 @@ import { CanvasText } from "@/components/CanvasText";
 import { useCanvasTexts } from "@/hooks/useCanvasTexts";
 import { CanvasImage } from "@/components/CanvasImage";
 import { useCanvasImages } from "@/hooks/useCanvasImages";
+import { CanvasTextButton } from "@/components/CanvasTextButton";
+import { CanvasImageButton } from "@/components/CanvasImageButton";
+import { useCanvasButtons } from "@/hooks/useCanvasButtons";
 
 export default function HomeContent() {
   const [overlayDone, setOverlayDone] = useState(false);
@@ -22,6 +25,10 @@ export default function HomeContent() {
   const { notes, addNote, updateNote, lockNote, deleteNote } = useStickyNotes();
   const { texts, addText, updateText, lockText, deleteText } = useCanvasTexts();
   const { images, addImage, updateImage, deleteImage } = useCanvasImages();
+  const {
+    textButtons, addTextButton, updateTextButton, lockTextButton, deleteTextButton,
+    imageButtons, addImageButton, updateImageButton, lockImageButton, deleteImageButton,
+  } = useCanvasButtons();
 
   const offsetX = useMotionValue(0);
   const offsetY = useMotionValue(0);
@@ -35,7 +42,7 @@ export default function HomeContent() {
 
 
   // Disable cartoon cursors when dev menu open or in dev modes
-  const disableCursors = devMenuOpen || mode === 'place' || mode === 'text';
+  const disableCursors = devMenuOpen || mode === 'place' || mode === 'text' || mode === 'textbtn' || mode === 'imgbtn';
 
   const handleCursorChange = useCallback((cursor: string | null) => {
     pencilActiveRef.current = cursor === "pencil";
@@ -54,8 +61,19 @@ export default function HomeContent() {
     img.src = url;
   }, [addImage, offsetX, offsetY]);
 
+  const handleImageButtonUpload = useCallback((file: File) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const cx = -offsetX.get() + window.innerWidth / 2;
+      const cy = -offsetY.get() + window.innerHeight / 2;
+      addImageButton(url, img.naturalWidth, img.naturalHeight, '', cx, cy);
+    };
+    img.src = url;
+  }, [addImageButton, offsetX, offsetY]);
+
   const getCursor = useCallback(() => {
-    if (mode === 'place' || mode === 'text') return 'crosshair';
+    if (mode === 'place' || mode === 'text' || mode === 'textbtn') return 'crosshair';
     return 'grab';
   }, [mode]);
 
@@ -70,7 +88,7 @@ export default function HomeContent() {
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("button, a, input, textarea")) return;
-    if (mode === 'place' || mode === 'text') return;
+    if (mode === 'place' || mode === 'text' || mode === 'textbtn' || mode === 'imgbtn') return;
     if (pencilActiveRef.current) return;
     e.preventDefault(); // prevent text selection while dragging
     isPanningRef.current = true;
@@ -125,6 +143,11 @@ export default function HomeContent() {
       const x = e.clientX - offsetX.get();
       const y = e.clientY - offsetY.get();
       addText(x, y);
+    } else if (mode === 'textbtn') {
+      if (textButtons.some((b) => b.isEditing)) return;
+      const x = e.clientX - offsetX.get();
+      const y = e.clientY - offsetY.get();
+      addTextButton(x, y);
     }
   };
 
@@ -183,7 +206,7 @@ export default function HomeContent() {
           onCursorChange={handleCursorChange}
           disableCursors={disableCursors}
         />
-        <DevButton mode={mode} onModeChange={setMode} onOpenChange={setDevMenuOpen} onImageUpload={handleImageUpload} />
+        <DevButton mode={mode} onModeChange={setMode} onOpenChange={setDevMenuOpen} onImageUpload={handleImageUpload} onImageButtonUpload={handleImageButtonUpload} />
 
         {/* Layer 1: Blue ruled lines */}
         <div
@@ -263,6 +286,35 @@ export default function HomeContent() {
               />
             ))}
           </div>
+
+          {/* Canvas text buttons */}
+          <div style={{ color: '#292524' }}>
+            {textButtons.map((b) => (
+              <CanvasTextButton
+                key={b.id}
+                data={b}
+                onUpdate={updateTextButton}
+                onLock={lockTextButton}
+                onDelete={deleteTextButton}
+                disabled={activeCursor === 'pencil'}
+                devMode={devMenuOpen}
+              />
+            ))}
+          </div>
+
+          {/* Canvas image buttons */}
+          {imageButtons.map((b) => (
+            <CanvasImageButton
+              key={b.id}
+              data={b}
+              onUpdate={updateImageButton}
+              onLock={lockImageButton}
+              onDelete={deleteImageButton}
+              disabled={activeCursor === 'pencil'}
+              devMode={devMenuOpen}
+              cursorMode={activeCursor}
+            />
+          ))}
 
           {/* Sticky notes — block most interaction when hand/pencil active, but hand can still tilt */}
           <div style={{ color: '#292524' }}>

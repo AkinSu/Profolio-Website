@@ -3,18 +3,20 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-export type CanvasMode = 'pan' | 'place' | 'text';
+export type CanvasMode = 'pan' | 'place' | 'text' | 'textbtn' | 'imgbtn';
 
 interface DevButtonProps {
   mode: CanvasMode;
   onModeChange: (mode: CanvasMode) => void;
   onOpenChange?: (open: boolean) => void;
   onImageUpload?: (file: File) => void;
+  onImageButtonUpload?: (file: File) => void;
 }
 
-export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload }: DevButtonProps) {
+export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onImageButtonUpload }: DevButtonProps) {
   const [open, setOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imgBtnInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     onOpenChange?.(open);
@@ -30,7 +32,14 @@ export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload }: D
     if (file && file.type === 'image/png') {
       onImageUpload?.(file);
     }
-    // Reset so same file can be re-uploaded
+    e.target.value = '';
+  };
+
+  const handleImgBtnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type === 'image/png') {
+      onImageButtonUpload?.(file);
+    }
     e.target.value = '';
   };
 
@@ -125,6 +134,62 @@ export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload }: D
                 onChange={handleFileChange}
                 style={{ display: 'none' }}
               />
+            </div>
+
+            {/* Buttons */}
+            <div style={{ padding: "8px 12px 8px" }}>
+              <p style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "monospace", marginBottom: 6, letterSpacing: "0.08em" }}>BUTTONS</p>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  onClick={() => onModeChange('textbtn')}
+                  style={{
+                    flex: 1,
+                    padding: "5px 0",
+                    background: mode === 'textbtn' ? "rgba(255,255,255,0.12)" : "transparent",
+                    color: mode === 'textbtn' ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.4)",
+                    border: `1px solid ${mode === 'textbtn' ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.06)"}`,
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontFamily: "monospace",
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  Aa text
+                </button>
+                <button
+                  onClick={() => imgBtnInputRef.current?.click()}
+                  style={{
+                    flex: 1,
+                    padding: "5px 0",
+                    background: "transparent",
+                    color: "rgba(255,255,255,0.4)",
+                    border: "1px dashed rgba(255,255,255,0.1)",
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontFamily: "monospace",
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(255,255,255,0.06)";
+                    e.currentTarget.style.color = "rgba(255,255,255,0.9)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "rgba(255,255,255,0.4)";
+                  }}
+                >
+                  🖼 image
+                </button>
+                <input
+                  ref={imgBtnInputRef}
+                  type="file"
+                  accept="image/png"
+                  onChange={handleImgBtnChange}
+                  style={{ display: 'none' }}
+                />
+              </div>
             </div>
           </motion.div>
         )}
