@@ -271,7 +271,9 @@ export function PencilCanvas({
   // ─── Pointer handlers ───
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
-      if (!isActive || !isAdmin) return;
+      if (!isActive) return;
+      // Dev draw mode is admin-only; pencil cursor is available to everyone
+      if (devDrawMode && !isAdmin) return;
       e.preventDefault();
       e.stopPropagation();
 
@@ -412,7 +414,7 @@ export function PencilCanvas({
   };
 
   const hasStrokes = strokes && strokes.length > 0;
-  const shouldRender = isAdmin || hasStrokes;
+  const shouldRender = isActive || isAdmin || hasStrokes;
   if (!shouldRender) return null;
 
   return (
@@ -424,7 +426,7 @@ export function PencilCanvas({
         width: CANVAS_W,
         height: CANVAS_H,
         zIndex: 3,
-        pointerEvents: isActive && isAdmin ? "auto" : "none",
+        pointerEvents: isActive ? "auto" : "none",
         touchAction: "none",
       }}
     >
