@@ -11,9 +11,10 @@ interface CanvasTextButtonProps {
   onDelete: (id: string) => void;
   disabled?: boolean;
   devMode?: boolean;
+  readOnly?: boolean;
 }
 
-export function CanvasTextButton({ data, onUpdate, onLock, onDelete, disabled, devMode }: CanvasTextButtonProps) {
+export function CanvasTextButton({ data, onUpdate, onLock, onDelete, disabled, devMode, readOnly }: CanvasTextButtonProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [showToolbar, setShowToolbar] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -136,6 +137,12 @@ export function CanvasTextButton({ data, onUpdate, onLock, onDelete, disabled, d
   );
 
   const handleTextClick = () => {
+    if (readOnly) {
+      if (data.href) {
+        window.open(data.href, '_blank', 'noopener,noreferrer');
+      }
+      return;
+    }
     if (devMode) {
       setShowToolbar(true);
       return;
@@ -148,6 +155,7 @@ export function CanvasTextButton({ data, onUpdate, onLock, onDelete, disabled, d
   };
 
   const handleDoubleClick = () => {
+    if (readOnly) return;
     if (!data.isEditing) {
       onUpdate(data.id, { isEditing: true });
       setShowToolbar(false);
@@ -155,6 +163,7 @@ export function CanvasTextButton({ data, onUpdate, onLock, onDelete, disabled, d
   };
 
   const handleRightClick = (e: React.MouseEvent) => {
+    if (readOnly) return;
     e.preventDefault();
     if (!data.isEditing) setShowToolbar(true);
   };
@@ -193,8 +202,8 @@ export function CanvasTextButton({ data, onUpdate, onLock, onDelete, disabled, d
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleRightClick}
     >
-      {/* Toolbar */}
-      {(data.isEditing || showToolbar) && (
+      {/* Toolbar (admin only) */}
+      {!readOnly && (data.isEditing || showToolbar) && (
         <div
           style={{
             position: 'absolute',

@@ -9,9 +9,10 @@ interface CanvasImageProps {
   onUpdate: (id: string, updates: Partial<CanvasImageData>) => void;
   onDelete: (id: string) => void;
   disabled?: boolean;
+  readOnly?: boolean;
 }
 
-export function CanvasImage({ data, onUpdate, onDelete, disabled }: CanvasImageProps) {
+export function CanvasImage({ data, onUpdate, onDelete, disabled, readOnly }: CanvasImageProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [selected, setSelected] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -247,7 +248,7 @@ export function CanvasImage({ data, onUpdate, onDelete, disabled }: CanvasImageP
           display: 'block',
         }}
         draggable={false}
-        onClick={() => setSelected(true)}
+        onClick={() => { if (!readOnly) setSelected(true); }}
       />
     </div>
   );

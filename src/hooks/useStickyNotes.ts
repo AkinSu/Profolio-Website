@@ -79,5 +79,5 @@ export function useStickyNotes() {
     setNotes((prev) => prev.filter((n) => n.id !== id));
   }, []);
 
-  return { notes, addNote, updateNote, lockNote, deleteNote };
+  return { notes, setNotes, addNote, updateNote, lockNote, deleteNote };
 }

@@ -111,11 +111,13 @@ export function useCanvasButtons() {
 
   return {
     textButtons,
+    setTextButtons,
     addTextButton,
     updateTextButton,
     lockTextButton,
     deleteTextButton,
     imageButtons,
+    setImageButtons,
     addImageButton,
     updateImageButton,
     lockImageButton,

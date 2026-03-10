@@ -12,9 +12,10 @@ interface CanvasImageButtonProps {
   disabled?: boolean;
   devMode?: boolean;
   cursorMode?: string | null;
+  readOnly?: boolean;
 }
 
-export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, devMode, cursorMode }: CanvasImageButtonProps) {
+export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, devMode, cursorMode, readOnly }: CanvasImageButtonProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [selected, setSelected] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -104,6 +105,11 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
 
   const handleImageClick = () => {
     if (data.isEditing) return;
+    // ReadOnly: just navigate
+    if (readOnly) {
+      if (data.href) window.open(data.href, '_blank', 'noopener,noreferrer');
+      return;
+    }
     // Hand cursor: navigate directly, no select step
     if (cursorMode === 'hand' && !devMode && data.href) {
       window.open(data.href, '_blank', 'noopener,noreferrer');
@@ -145,8 +151,8 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
       }}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      {/* Toolbar */}
-      {(selected || data.isEditing) && (
+      {/* Toolbar (admin only) */}
+      {!readOnly && (selected || data.isEditing) && (
         <div
           style={{
             position: 'absolute',

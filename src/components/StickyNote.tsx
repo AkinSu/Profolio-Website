@@ -12,6 +12,7 @@ interface StickyNoteProps {
   onDelete: (id: string) => void;
   cursorMode?: string | null;
   devMode?: boolean;
+  readOnly?: boolean;
 }
 export function StickyNote({
   note,
@@ -19,7 +20,8 @@ export function StickyNote({
   onLock,
   onDelete,
   cursorMode,
-  devMode
+  devMode,
+  readOnly
 }: StickyNoteProps) {
   const [rotation, setRotation] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -338,14 +340,14 @@ export function StickyNote({
       }}
       onPointerDown={(e) => e.stopPropagation()}>
 
-      {/* Thumb tack — only when locked, now draggable */}
+      {/* Thumb tack — only when locked, draggable for admins */}
       {!note.isEditing &&
       <div
         className="absolute -top-5 left-1/2 -translate-x-1/2 z-20"
         style={{
-          cursor: isDragging ? 'grabbing' : 'grab'
+          cursor: readOnly ? 'default' : isDragging ? 'grabbing' : 'grab'
         }}
-        onPointerDown={onTackPointerDown}>
+        onPointerDown={readOnly ? undefined : onTackPointerDown}>
 
           <img
           src={TACK_IMG}
@@ -538,17 +540,18 @@ export function StickyNote({
                   Empty note
                 </p>
             }
-              <button
+              {!readOnly && <button
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete(note.id);
               }}
-              className="delete-btn absolute -top-2 -right-2 w-6 h-6 rounded-full bg-stone-700/80 text-white flex items-center justify-center opacity-0 hover:bg-red-500 transition-all shadow-sm z-30"
+              className="delete-btn absolute -top-2 -right-2 w-6 h-6 rounded-full text-white flex items-center justify-center opacity-0 hover:bg-red-500 transition-all shadow-sm z-30"
+              style={{ backgroundColor: 'rgba(239, 68, 68, 0.6)' }}
               title="Delete">
 
                 <XIcon className="w-3 h-3" />
-              </button>
-              {!devMode && corners.map((c, i) =>
+              </button>}
+              {!readOnly && !devMode && corners.map((c, i) =>
             <div
               key={i}
               className={`corner-handle tilt-handle ${c.className}`}
@@ -579,8 +582,8 @@ export function StickyNote({
               }} />
 
             )}
-              {/* Resize handle — hidden when hand/pencil cursor active */}
-              {!isCursorActive && <div
+              {/* Resize handle — hidden when hand/pencil cursor active or readOnly */}
+              {!readOnly && !isCursorActive && <div
                 className="resize-handle"
                 onPointerDown={onResizeDown}
                 title="Resize"

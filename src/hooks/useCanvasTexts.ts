@@ -54,5 +54,5 @@ export function useCanvasTexts() {
     setTexts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  return { texts, addText, updateText, lockText, deleteText };
+  return { texts, setTexts, addText, updateText, lockText, deleteText };
 }

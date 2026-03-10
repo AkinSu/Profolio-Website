@@ -10,9 +10,10 @@ interface CanvasTextProps {
   onLock: (id: string) => void;
   onDelete: (id: string) => void;
   disabled?: boolean;
+  readOnly?: boolean;
 }
 
-export function CanvasText({ data, onUpdate, onLock, onDelete, disabled }: CanvasTextProps) {
+export function CanvasText({ data, onUpdate, onLock, onDelete, disabled, readOnly }: CanvasTextProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [showToolbar, setShowToolbar] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -135,11 +136,11 @@ export function CanvasText({ data, onUpdate, onLock, onDelete, disabled }: Canva
 
   // Click text to show toolbar
   const handleTextClick = () => {
-    if (!data.isEditing) setShowToolbar(true);
+    if (!data.isEditing && !readOnly) setShowToolbar(true);
   };
 
   const handleDoubleClick = () => {
-    if (!data.isEditing) {
+    if (!data.isEditing && !readOnly) {
       onUpdate(data.id, { isEditing: true });
       setShowToolbar(false);
     }
@@ -178,8 +179,8 @@ export function CanvasText({ data, onUpdate, onLock, onDelete, disabled }: Canva
       onPointerDown={(e) => e.stopPropagation()}
       onDoubleClick={handleDoubleClick}
     >
-      {/* Toolbar — visible when editing or when clicked */}
-      {(data.isEditing || showToolbar) && (
+      {/* Toolbar — visible when editing or when clicked (admin only) */}
+      {!readOnly && (data.isEditing || showToolbar) && (
         <div
           style={{
             position: 'absolute',

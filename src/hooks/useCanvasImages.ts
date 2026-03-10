@@ -42,5 +42,5 @@ export function useCanvasImages() {
     setImages((prev) => prev.filter((img) => img.id !== id));
   }, []);
 
-  return { images, addImage, updateImage, deleteImage };
+  return { images, setImages, addImage, updateImage, deleteImage };
 }
