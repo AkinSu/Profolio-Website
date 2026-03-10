@@ -93,7 +93,7 @@ export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onI
                       transition: "all 0.15s",
                     }}
                   >
-                    {m === 'pan' ? 'edit' : m === 'place' ? '📌 note' : '✏️ write'}
+                    {m === 'pan' ? 'edit' : m === 'place' ? '📌 note' : 'Aa write'}
                   </button>
                 ))}
               </div>
