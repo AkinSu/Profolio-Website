@@ -16,6 +16,7 @@ import { CanvasImageButton } from "@/components/CanvasImageButton";
 import { CanvasTextButtonData, CanvasImageButtonData } from "@/hooks/useCanvasButtons";
 import { useCanvasElements, CanvasElement } from "@/hooks/useCanvasElements";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { uploadFiles } from "@/lib/uploadthing";
 
 const NOTE_COLORS = ['#FFF176', '#F48FB1', '#90CAF9', '#A5D6A7', '#FFCC80', '#CE93D8'];
 function randomNoteColor() { return NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)]; }
@@ -27,6 +28,7 @@ export default function HomeContent() {
   const [devMenuOpen, setDevMenuOpen] = useState(false);
   const [activeCursor, setActiveCursor] = useState<string | null>(null);
   const pencilActiveRef = useRef(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   // ─── Single source of truth ───
   const {
@@ -114,47 +116,70 @@ export default function HomeContent() {
     return id;
   }, [addElement]);
 
-  const handleImageUpload = useCallback((file: File) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const cx = -offsetX.get() + window.innerWidth / 2;
-      const cy = -offsetY.get() + window.innerHeight / 2;
-      const displayWidth = 300;
-      const displayHeight = (img.naturalHeight / img.naturalWidth) * displayWidth;
-      const id = crypto.randomUUID();
-      addElement({
-        id, type: 'image', z_index: 8,
-        data: {
-          x: cx - displayWidth / 2, y: cy - displayHeight / 2,
-          width: displayWidth, height: displayHeight, rotation: 0,
-          src: url, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight,
-        },
-      }, true); // persist immediately — images don't have an editing state
-    };
-    img.src = url;
+  const handleImageUpload = useCallback(async (file: File) => {
+    setIsUploading(true);
+    try {
+      const [uploaded] = await uploadFiles("canvasImage", { files: [file] });
+      console.log('UploadThing response:', JSON.stringify(uploaded, null, 2));
+      const url = uploaded.url ?? uploaded.ufsUrl ?? (uploaded.serverData as Record<string, unknown>)?.url;
+      if (!url) { console.error('No URL in upload response:', uploaded); setIsUploading(false); return; }
+      // Load the image to get natural dimensions
+      const img = new Image();
+      img.onload = () => {
+        const cx = -offsetX.get() + window.innerWidth / 2;
+        const cy = -offsetY.get() + window.innerHeight / 2;
+        const displayWidth = 300;
+        const displayHeight = (img.naturalHeight / img.naturalWidth) * displayWidth;
+        const id = crypto.randomUUID();
+        addElement({
+          id, type: 'image', z_index: 8,
+          data: {
+            x: cx - displayWidth / 2, y: cy - displayHeight / 2,
+            width: displayWidth, height: displayHeight, rotation: 0,
+            src: url, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight,
+          },
+        }, true);
+        setIsUploading(false);
+      };
+      img.onerror = () => setIsUploading(false);
+      img.src = url;
+    } catch (err) {
+      console.error('Image upload failed:', err);
+      setIsUploading(false);
+    }
   }, [addElement]);
 
-  const handleImageButtonUpload = useCallback((file: File) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const cx = -offsetX.get() + window.innerWidth / 2;
-      const cy = -offsetY.get() + window.innerHeight / 2;
-      const displayWidth = 200;
-      const displayHeight = (img.naturalHeight / img.naturalWidth) * displayWidth;
-      const id = crypto.randomUUID();
-      addElement({
-        id, type: 'image_button', z_index: 8,
-        data: {
-          x: cx - displayWidth / 2, y: cy - displayHeight / 2,
-          width: displayWidth, height: displayHeight,
-          src: url, href: '', naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight,
-          isEditing: true,
-        },
-      });
-    };
-    img.src = url;
+  const handleImageButtonUpload = useCallback(async (file: File) => {
+    setIsUploading(true);
+    try {
+      const [uploaded] = await uploadFiles("canvasImage", { files: [file] });
+      console.log('UploadThing response:', JSON.stringify(uploaded, null, 2));
+      const url = uploaded.url ?? uploaded.ufsUrl ?? (uploaded.serverData as Record<string, unknown>)?.url;
+      if (!url) { console.error('No URL in upload response:', uploaded); setIsUploading(false); return; }
+      const img = new Image();
+      img.onload = () => {
+        const cx = -offsetX.get() + window.innerWidth / 2;
+        const cy = -offsetY.get() + window.innerHeight / 2;
+        const displayWidth = 200;
+        const displayHeight = (img.naturalHeight / img.naturalWidth) * displayWidth;
+        const id = crypto.randomUUID();
+        addElement({
+          id, type: 'image_button', z_index: 8,
+          data: {
+            x: cx - displayWidth / 2, y: cy - displayHeight / 2,
+            width: displayWidth, height: displayHeight,
+            src: url, href: '', naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight,
+            isEditing: true,
+          },
+        });
+        setIsUploading(false);
+      };
+      img.onerror = () => setIsUploading(false);
+      img.src = url;
+    } catch (err) {
+      console.error('Image button upload failed:', err);
+      setIsUploading(false);
+    }
   }, [addElement]);
 
   // ─── Update handlers (pass-through to updateElement) ───
@@ -346,6 +371,27 @@ export default function HomeContent() {
           }}
         >
           loading canvas...
+        </div>
+      )}
+
+      {isUploading && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 80,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 9999,
+            background: 'rgba(26,26,26,0.85)',
+            color: 'rgba(255,255,255,0.7)',
+            padding: '6px 16px',
+            borderRadius: 8,
+            fontSize: 12,
+            fontFamily: 'monospace',
+            pointerEvents: 'none',
+          }}
+        >
+          uploading image...
         </div>
       )}
 

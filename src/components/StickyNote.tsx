@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { ImagePlusIcon, CheckIcon, XIcon, BoldIcon, ItalicIcon, AlignCenterIcon } from 'lucide-react';
+import { ImagePlusIcon, CheckIcon, XIcon, BoldIcon, ItalicIcon, AlignCenterIcon, LoaderIcon } from 'lucide-react';
 import { StickyNoteData } from '../hooks/useStickyNotes';
+import { uploadFiles } from '@/lib/uploadthing';
 const TACK_IMG = "/tack.png";
 
 interface StickyNoteProps {
@@ -163,29 +164,44 @@ export function StickyNote({
   const handleImageClick = () => {
     fileInputRef.current?.click();
   };
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
     const isVideo = file.type.startsWith('video/');
     const isGif = file.type === 'image/gif';
     const mediaType = isVideo ? 'video' as const : isGif ? 'gif' as const : 'image' as const;
 
+    // Videos can't be uploaded via UploadThing image endpoint — use blob URL as fallback
     if (isVideo) {
+      const url = URL.createObjectURL(file);
       const vid = document.createElement('video');
       vid.onloadedmetadata = () => {
-        const aspect = vid.videoWidth / vid.videoHeight;
         const newWidth = Math.max(note.width, Math.min(500, vid.videoWidth));
         onUpdate(note.id, { imageUrl: url, mediaType, width: newWidth });
       };
       vid.src = url;
-    } else {
+      return;
+    }
+
+    setIsUploadingMedia(true);
+    try {
+      const [uploaded] = await uploadFiles("canvasImage", { files: [file] });
+      console.log('UploadThing response:', JSON.stringify(uploaded, null, 2));
+      const url = uploaded.url ?? uploaded.ufsUrl ?? (uploaded.serverData as Record<string, unknown>)?.url;
+      if (!url) { console.error('No URL in upload response:', uploaded); setIsUploadingMedia(false); return; }
       const img = new window.Image();
       img.onload = () => {
         const newWidth = Math.max(note.width, Math.min(500, img.naturalWidth));
         onUpdate(note.id, { imageUrl: url, mediaType, width: newWidth });
+        setIsUploadingMedia(false);
       };
+      img.onerror = () => setIsUploadingMedia(false);
       img.src = url;
+    } catch (err) {
+      console.error('Sticky note image upload failed:', err);
+      setIsUploadingMedia(false);
     }
   };
   // --- Drag-to-move via thumb tack ---
@@ -420,7 +436,12 @@ export function StickyNote({
               className="relative w-full rounded border-2 border-dashed border-stone-400/40 flex items-center justify-center cursor-pointer hover:border-stone-500/60 transition-colors overflow-hidden"
               style={{ minHeight: note.imageUrl ? undefined : Math.round(note.width * 0.3) }}>
 
-                {note.imageUrl ? (
+                {isUploadingMedia ? (
+                  <div className="flex flex-col items-center gap-1 text-stone-400/70" style={{ padding: 16 }}>
+                    <LoaderIcon className="w-7 h-7 animate-spin" />
+                    <span className="text-xs font-handwriting">Uploading...</span>
+                  </div>
+                ) : note.imageUrl ? (
                   note.mediaType === 'video' ? (
                     <video
                       src={note.imageUrl}
