@@ -572,7 +572,7 @@ export function StickyNote({
 
                 <XIcon className="w-3 h-3" />
               </button>}
-              {!readOnly && !devMode && corners.map((c, i) =>
+              {!devMode && corners.map((c, i) =>
             <div
               key={i}
               className={`corner-handle tilt-handle ${c.className}`}
