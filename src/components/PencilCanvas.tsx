@@ -29,7 +29,8 @@ interface PencilCanvasProps {
 // ─── Constants ───
 
 const CANVAS_W = 8000;
-const CANVAS_H = 4000;
+const CANVAS_H = 6000; // Covers full pannable Y range (-2000 to 4000)
+const CANVAS_Y_OFFSET = -2000; // Canvas starts 2000px above world origin
 const TIP_SIZE = 14;
 const STAMP_SPACING = 2;
 
@@ -410,7 +411,7 @@ export function PencilCanvas({
     <div
       style={{
         position: "absolute",
-        top: 0,
+        top: CANVAS_Y_OFFSET,
         left: 0,
         width: CANVAS_W,
         height: CANVAS_H,
