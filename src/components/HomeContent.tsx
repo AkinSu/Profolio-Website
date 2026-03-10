@@ -30,6 +30,7 @@ export default function HomeContent() {
   const [activeCursor, setActiveCursor] = useState<string | null>(null);
   const pencilActiveRef = useRef(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [drawMode, setDrawMode] = useState(false);
   const [pencilStrokes, setPencilStrokes] = useState<PencilStroke[]>([]);
 
   const handleStrokeComplete = useCallback((stroke: PencilStroke) => {
@@ -270,9 +271,10 @@ export default function HomeContent() {
   }, []);
 
   const getCursor = useCallback(() => {
+    if (drawMode) return 'crosshair';
     if (mode === 'place' || mode === 'text' || mode === 'textbtn') return 'crosshair';
     return 'grab';
-  }, [mode]);
+  }, [mode, drawMode]);
 
   useEffect(() => {
     const stop = () => {
@@ -286,7 +288,7 @@ export default function HomeContent() {
   const handleMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("button, a, input, textarea")) return;
     if (mode === 'place' || mode === 'text' || mode === 'textbtn' || mode === 'imgbtn') return;
-    if (pencilActiveRef.current) return;
+    if (pencilActiveRef.current || drawMode) return;
     e.preventDefault();
     isPanningRef.current = true;
     didPanRef.current = false;
@@ -445,7 +447,7 @@ export default function HomeContent() {
           disableCursors={disableCursors}
         />
         {isAdmin && (
-          <DevButton mode={mode} onModeChange={setMode} onOpenChange={setDevMenuOpen} onImageUpload={handleImageUpload} onImageButtonUpload={handleImageButtonUpload} />
+          <DevButton mode={mode} onModeChange={setMode} onOpenChange={setDevMenuOpen} onImageUpload={handleImageUpload} onImageButtonUpload={handleImageButtonUpload} drawMode={drawMode} onDrawModeChange={setDrawMode} />
         )}
 
         {/* Layer 1: Blue ruled lines */}
@@ -506,7 +508,7 @@ export default function HomeContent() {
           <PencilCanvas
             offsetX={offsetX}
             offsetY={offsetY}
-            isActive={activeCursor === 'pencil'}
+            isActive={activeCursor === 'pencil' || drawMode}
             isAdmin={isAdmin}
             strokes={pencilStrokes}
             onStrokeComplete={handleStrokeComplete}

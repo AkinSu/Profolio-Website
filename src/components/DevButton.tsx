@@ -11,9 +11,11 @@ interface DevButtonProps {
   onOpenChange?: (open: boolean) => void;
   onImageUpload?: (file: File) => void;
   onImageButtonUpload?: (file: File) => void;
+  drawMode?: boolean;
+  onDrawModeChange?: (enabled: boolean) => void;
 }
 
-export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onImageButtonUpload }: DevButtonProps) {
+export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onImageButtonUpload, drawMode, onDrawModeChange }: DevButtonProps) {
   const [open, setOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imgBtnInputRef = useRef<HTMLInputElement>(null);
@@ -134,6 +136,40 @@ export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onI
                 onChange={handleFileChange}
                 style={{ display: 'none' }}
               />
+            </div>
+
+            {/* Draw toggle */}
+            <div style={{ padding: "8px 12px 8px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <p style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "monospace", letterSpacing: "0.08em", margin: 0 }}>DRAW</p>
+                <button
+                  onClick={() => onDrawModeChange?.(!drawMode)}
+                  style={{
+                    position: "relative",
+                    width: 36,
+                    height: 18,
+                    borderRadius: 9,
+                    border: "none",
+                    background: drawMode ? "rgba(120,200,120,0.5)" : "rgba(255,255,255,0.1)",
+                    cursor: "pointer",
+                    transition: "background 0.2s",
+                    padding: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 2,
+                      left: drawMode ? 20 : 2,
+                      width: 14,
+                      height: 14,
+                      borderRadius: 7,
+                      background: drawMode ? "#fff" : "rgba(255,255,255,0.4)",
+                      transition: "left 0.2s, background 0.2s",
+                    }}
+                  />
+                </button>
+              </div>
             </div>
 
             {/* Buttons */}
