@@ -332,6 +332,9 @@ export function PencilCanvas({
         const x = ev.clientX - rect.left;
         const y = ev.clientY - rect.top;
 
+        // Pencil button mode: clamp to original range
+        if (!devDrawMode && y < -CANVAS_Y_OFFSET) continue;
+
         const now = performance.now();
         const dt = now - lastTime.current;
         const isMouse = ev.pointerType === "mouse";
