@@ -9,234 +9,233 @@ export interface CanvasElement {
   updated_at?: string;
 }
 
-export function useCanvasElements() {
+function num(v: unknown, fallback: number): number {
+  const n = Number(v);
+  return isNaN(n) ? fallback : n;
+}
+
+/** Coerce numeric fields that JSONB may return as strings */
+function coerceData(d: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...d };
+  if ('x' in out) out.x = num(out.x, 0);
+  if ('y' in out) out.y = num(out.y, 0);
+  if ('width' in out) out.width = num(out.width, 300);
+  if ('height' in out) out.height = num(out.height, 200);
+  if ('fontSize' in out) out.fontSize = num(out.fontSize, 28);
+  if ('rotation' in out) out.rotation = num(out.rotation, 0);
+  if ('naturalWidth' in out) out.naturalWidth = num(out.naturalWidth, 300);
+  if ('naturalHeight' in out) out.naturalHeight = num(out.naturalHeight, 200);
+  return out;
+}
+
+function stripIsEditing(data: Record<string, unknown>): Record<string, unknown> {
+  const { isEditing, ...rest } = data;
+  return rest;
+}
+
+export function useCanvasElements(isAdmin: boolean) {
   const [elements, setElements] = useState<CanvasElement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Debounce timers for updates keyed by element id
-  const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  // Store pending update data so debounced call uses latest values
-  const pendingUpdates = useRef<Map<string, { data: Record<string, unknown>; z_index?: number }>>(new Map());
-  // Track element IDs currently being dragged/edited locally — skip poll updates for these
-  const lockedIds = useRef<Set<string>>(new Set());
+  // Always-current ref for reading elements in async callbacks
+  const elementsRef = useRef<CanvasElement[]>([]);
+  elementsRef.current = elements;
 
-  // Fetch all elements on mount
+  // IDs that exist locally but haven't been POSTed to DB yet
+  const unpersistedIds = useRef<Set<string>>(new Set());
+
+  // Debounce timers for PUT updates
+  const updateTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Fetch from API, coerce numbers, mark all as not editing
+  const fetchElements = useCallback(async (): Promise<CanvasElement[] | null> => {
+    try {
+      const res = await fetch('/api/canvas');
+      if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+      const json = await res.json();
+      return (json.elements || []).map((e: CanvasElement) => ({
+        ...e,
+        data: { ...coerceData(e.data), isEditing: false },
+      }));
+    } catch (err) {
+      console.error('Failed to load canvas elements:', err);
+      return null;
+    }
+  }, []);
+
+  // Initial load
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      try {
-        const res = await fetch('/api/canvas');
-        if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
-        const json = await res.json();
-        if (!cancelled) {
-          setElements(json.elements || []);
-        }
-      } catch (err) {
-        console.error('Failed to load canvas elements:', err);
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
+      const els = await fetchElements();
+      if (!cancelled && els) setElements(els);
+      if (!cancelled) setIsLoading(false);
     }
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [fetchElements]);
 
-  // --- Live polling every 2s ---
+  // Polling for visitors only — replaces state every 2s
   useEffect(() => {
+    if (isAdmin) return;
+
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
     async function poll() {
-      try {
-        const res = await fetch('/api/canvas');
-        if (!res.ok) return;
-        const json = await res.json();
-        const incoming: CanvasElement[] = json.elements || [];
-
-        setElements((prev) => {
-          // Build a map of current elements by id
-          const prevMap = new Map(prev.map((e) => [e.id, e]));
-          const incomingMap = new Map(incoming.map((e) => [e.id, e]));
-
-          let changed = false;
-
-          // Check for new or updated elements
-          for (const el of incoming) {
-            const existing = prevMap.get(el.id);
-            if (!existing) {
-              changed = true;
-              break;
-            }
-            // Skip elements currently being dragged/edited
-            if (lockedIds.current.has(el.id)) continue;
-            // Compare updated_at to detect changes
-            if (el.updated_at !== existing.updated_at) {
-              changed = true;
-              break;
-            }
-          }
-
-          // Check for deleted elements
-          if (!changed) {
-            for (const e of prev) {
-              if (!incomingMap.has(e.id)) {
-                changed = true;
-                break;
-              }
-            }
-          }
-
-          if (!changed) return prev;
-
-          // Merge: use incoming data but preserve local state for locked elements
-          return incoming.map((el) => {
-            if (lockedIds.current.has(el.id)) {
-              const local = prevMap.get(el.id);
-              return local || el;
-            }
-            return el;
-          });
-        });
-      } catch {
-        // Silently ignore poll errors
-      }
+      const els = await fetchElements();
+      if (els) setElements(els);
     }
 
-    function startPolling() {
+    function start() {
       if (intervalId) return;
       intervalId = setInterval(poll, 2000);
     }
 
-    function stopPolling() {
-      if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
-      }
+    function stop() {
+      if (intervalId) { clearInterval(intervalId); intervalId = null; }
     }
 
-    function handleVisibility() {
-      if (document.visibilityState === 'visible') {
-        poll(); // Immediate fetch when tab becomes visible
-        startPolling();
-      } else {
-        stopPolling();
-      }
+    function onVisibility() {
+      if (document.visibilityState === 'visible') { poll(); start(); }
+      else stop();
     }
 
-    // Start polling if tab is visible
-    if (document.visibilityState === 'visible') {
-      startPolling();
-    }
-    document.addEventListener('visibilitychange', handleVisibility);
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility); };
+  }, [isAdmin, fetchElements]);
 
-    return () => {
-      stopPolling();
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
-  }, []);
-
-  // Cleanup timers on unmount
+  // Cleanup debounce timers on unmount
   useEffect(() => {
-    return () => {
-      debounceTimers.current.forEach((timer) => clearTimeout(timer));
-    };
+    return () => { updateTimers.current.forEach((t) => clearTimeout(t)); };
   }, []);
 
+  /** Add element to local state. If persist=true, POST immediately. Otherwise mark as unpersisted. */
   const addElement = useCallback(
-    async (element: CanvasElement) => {
-      // Optimistic add
+    async (element: CanvasElement, persist = false) => {
       setElements((prev) => [...prev, element]);
 
+      if (persist) {
+        try {
+          const res = await fetch('/api/canvas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: element.id, type: element.type,
+              data: stripIsEditing(element.data), z_index: element.z_index,
+            }),
+          });
+          if (!res.ok) throw new Error(`POST failed: ${res.status}`);
+        } catch (err) {
+          console.error('Failed to add element:', err);
+          setElements((prev) => prev.filter((e) => e.id !== element.id));
+        }
+      } else {
+        unpersistedIds.current.add(element.id);
+      }
+    },
+    []
+  );
+
+  /** Persist a locally-added element: POST if new, immediate PUT if already persisted. */
+  const persistElement = useCallback(async (id: string) => {
+    // Cancel any pending debounced update
+    const timer = updateTimers.current.get(id);
+    if (timer) { clearTimeout(timer); updateTimers.current.delete(id); }
+
+    const element = elementsRef.current.find((e) => e.id === id);
+    if (!element) return;
+
+    const cleanData = stripIsEditing(element.data);
+    const isNew = unpersistedIds.current.has(id);
+
+    if (isNew) {
+      unpersistedIds.current.delete(id);
       try {
         const res = await fetch('/api/canvas', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(element),
+          body: JSON.stringify({ id, type: element.type, data: cleanData, z_index: element.z_index }),
         });
         if (!res.ok) throw new Error(`POST failed: ${res.status}`);
       } catch (err) {
-        console.error('Failed to add element:', err);
-        // Revert
-        setElements((prev) => prev.filter((e) => e.id !== element.id));
+        console.error('Failed to persist element:', err);
       }
-    },
-    []
-  );
+    } else {
+      try {
+        const res = await fetch('/api/canvas', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, data: cleanData, z_index: element.z_index }),
+        });
+        if (!res.ok) throw new Error(`PUT failed: ${res.status}`);
+      } catch (err) {
+        console.error('Failed to update element:', err);
+      }
+    }
+  }, []);
 
+  /** Update element data locally. If persisted and real data changed, debounced PUT. */
   const updateElement = useCallback(
-    (id: string, data: Record<string, unknown>, z_index?: number) => {
-      // Mark as locked so polling doesn't overwrite during drag
-      lockedIds.current.add(id);
-
-      // Optimistic update
+    (id: string, dataUpdates: Record<string, unknown>, z_index?: number) => {
       setElements((prev) =>
         prev.map((e) =>
-          e.id === id ? { ...e, data: { ...e.data, ...data }, ...(z_index !== undefined ? { z_index } : {}) } : e
+          e.id === id
+            ? { ...e, data: { ...e.data, ...dataUpdates }, ...(z_index !== undefined ? { z_index } : {}) }
+            : e
         )
       );
 
-      // Store latest pending data
-      const existing = pendingUpdates.current.get(id);
-      pendingUpdates.current.set(id, {
-        data: existing ? { ...existing.data, ...data } : data,
-        z_index: z_index !== undefined ? z_index : existing?.z_index,
-      });
+      // Skip API call if unpersisted or only isEditing changed
+      if (unpersistedIds.current.has(id)) return;
+      const hasRealChanges = Object.keys(dataUpdates).some((k) => k !== 'isEditing');
+      if (!hasRealChanges && z_index === undefined) return;
 
-      // Debounce the API call
-      const existingTimer = debounceTimers.current.get(id);
-      if (existingTimer) clearTimeout(existingTimer);
+      // Debounced PUT
+      const existing = updateTimers.current.get(id);
+      if (existing) clearTimeout(existing);
 
       const timer = setTimeout(async () => {
-        debounceTimers.current.delete(id);
-        const pending = pendingUpdates.current.get(id);
-        pendingUpdates.current.delete(id);
-        if (!pending) return;
+        updateTimers.current.delete(id);
+
+        const el = elementsRef.current.find((e) => e.id === id);
+        if (!el) return;
+        const fullData = stripIsEditing(el.data);
+        const currentZ = el.z_index;
 
         try {
-          // Get the full current data for this element
-          let fullData: Record<string, unknown> = {};
-          setElements((prev) => {
-            const el = prev.find((e) => e.id === id);
-            if (el) fullData = { ...el.data };
-            return prev;
-          });
-
           const res = await fetch('/api/canvas', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, data: fullData, z_index: pending.z_index }),
+            body: JSON.stringify({ id, data: fullData, z_index: currentZ }),
           });
           if (!res.ok) throw new Error(`PUT failed: ${res.status}`);
         } catch (err) {
           console.error('Failed to update element:', err);
-        } finally {
-          // Unlock after the debounced write completes
-          lockedIds.current.delete(id);
         }
       }, 500);
 
-      debounceTimers.current.set(id, timer);
+      updateTimers.current.set(id, timer);
     },
     []
   );
 
-  const removeElement = useCallback(
-    async (id: string) => {
-      // Cancel any pending update
-      const timer = debounceTimers.current.get(id);
-      if (timer) {
-        clearTimeout(timer);
-        debounceTimers.current.delete(id);
-      }
-      pendingUpdates.current.delete(id);
-      lockedIds.current.delete(id);
+  /** Remove element locally + DELETE from DB if it was persisted. */
+  const removeElement = useCallback(async (id: string) => {
+    // Cancel pending updates
+    const timer = updateTimers.current.get(id);
+    if (timer) { clearTimeout(timer); updateTimers.current.delete(id); }
 
-      // Optimistic remove — store for revert
-      let removed: CanvasElement | undefined;
-      setElements((prev) => {
-        removed = prev.find((e) => e.id === id);
-        return prev.filter((e) => e.id !== id);
-      });
+    const wasPersisted = !unpersistedIds.current.has(id);
+    unpersistedIds.current.delete(id);
 
+    let removed: CanvasElement | undefined;
+    setElements((prev) => {
+      removed = prev.find((e) => e.id === id);
+      return prev.filter((e) => e.id !== id);
+    });
+
+    if (wasPersisted) {
       try {
         const res = await fetch('/api/canvas', {
           method: 'DELETE',
@@ -246,14 +245,10 @@ export function useCanvasElements() {
         if (!res.ok) throw new Error(`DELETE failed: ${res.status}`);
       } catch (err) {
         console.error('Failed to delete element:', err);
-        // Revert
-        if (removed) {
-          setElements((prev) => [...prev, removed!]);
-        }
+        if (removed) setElements((prev) => [...prev, removed!]);
       }
-    },
-    []
-  );
+    }
+  }, []);
 
-  return { elements, isLoading, addElement, updateElement, removeElement };
+  return { elements, setElements, isLoading, addElement, persistElement, updateElement, removeElement };
 }

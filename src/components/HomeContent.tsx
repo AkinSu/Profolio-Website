@@ -1,21 +1,24 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { motion, useMotionValue } from "framer-motion";
 import { Navigation } from "@/components/Navigation";
 import { IntroAnimation } from "@/components/IntroAnimation";
 import { DevButton, CanvasMode } from "@/components/DevButton";
 import { StickyNote } from "@/components/StickyNote";
-import { useStickyNotes, StickyNoteData } from "@/hooks/useStickyNotes";
+import { StickyNoteData, MediaType } from "@/hooks/useStickyNotes";
 import { CanvasText } from "@/components/CanvasText";
-import { useCanvasTexts, CanvasTextData } from "@/hooks/useCanvasTexts";
+import { CanvasTextData } from "@/hooks/useCanvasTexts";
 import { CanvasImage } from "@/components/CanvasImage";
-import { useCanvasImages, CanvasImageData } from "@/hooks/useCanvasImages";
+import { CanvasImageData } from "@/hooks/useCanvasImages";
 import { CanvasTextButton } from "@/components/CanvasTextButton";
 import { CanvasImageButton } from "@/components/CanvasImageButton";
-import { useCanvasButtons, CanvasTextButtonData, CanvasImageButtonData } from "@/hooks/useCanvasButtons";
-import { useCanvasElements } from "@/hooks/useCanvasElements";
+import { CanvasTextButtonData, CanvasImageButtonData } from "@/hooks/useCanvasButtons";
+import { useCanvasElements, CanvasElement } from "@/hooks/useCanvasElements";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+
+const NOTE_COLORS = ['#FFF176', '#F48FB1', '#90CAF9', '#A5D6A7', '#FFCC80', '#CE93D8'];
+function randomNoteColor() { return NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)]; }
 
 export default function HomeContent() {
   const { isAdmin, isAdminResolved } = useIsAdmin();
@@ -25,313 +28,198 @@ export default function HomeContent() {
   const [activeCursor, setActiveCursor] = useState<string | null>(null);
   const pencilActiveRef = useRef(false);
 
-  const { notes, setNotes, addNote, updateNote, lockNote, deleteNote } = useStickyNotes();
-  const { texts, setTexts, addText, updateText, lockText, deleteText } = useCanvasTexts();
-  const { images, setImages, addImage, updateImage, deleteImage } = useCanvasImages();
+  // ─── Single source of truth ───
   const {
-    textButtons, setTextButtons, addTextButton, updateTextButton, lockTextButton, deleteTextButton,
-    imageButtons, setImageButtons, addImageButton, updateImageButton, lockImageButton, deleteImageButton,
-  } = useCanvasButtons();
+    elements, isLoading,
+    addElement, persistElement, updateElement, removeElement,
+  } = useCanvasElements(isAdmin);
 
-  const {
-    elements: dbElements,
-    isLoading,
-    addElement,
-    updateElement,
-    removeElement,
-  } = useCanvasElements();
+  // Keep a ref for reading current elements in callbacks
+  const elementsRef = useRef(elements);
+  elementsRef.current = elements;
 
-  // Prev refs for DB sync — declared here so hydration can pre-populate them
-  const prevNotesRef = useRef<StickyNoteData[]>([]);
-  const prevTextsRef = useRef<CanvasTextData[]>([]);
-  const prevImagesRef = useRef<CanvasImageData[]>([]);
-  const prevTextBtnsRef = useRef<CanvasTextButtonData[]>([]);
-  const prevImgBtnsRef = useRef<CanvasImageButtonData[]>([]);
+  // ─── Derived typed arrays via useMemo ───
+  const notes = useMemo<StickyNoteData[]>(() =>
+    elements
+      .filter((e) => e.type === 'sticky_note')
+      .map((e) => ({ ...e.data, id: e.id } as StickyNoteData)),
+    [elements]
+  );
 
-  // Hydrate local state from DB on initial load
-  // Helper: parse dbElements into local state arrays
-  const parseDbElements = useCallback((els: typeof dbElements) => {
-    const loadedNotes: StickyNoteData[] = [];
-    const loadedTexts: CanvasTextData[] = [];
-    const loadedImages: CanvasImageData[] = [];
-    const loadedTextButtons: CanvasTextButtonData[] = [];
-    const loadedImageButtons: CanvasImageButtonData[] = [];
+  const texts = useMemo<CanvasTextData[]>(() =>
+    elements
+      .filter((e) => e.type === 'text')
+      .map((e) => ({ ...e.data, id: e.id } as CanvasTextData)),
+    [elements]
+  );
 
-    // Coerce numeric fields that JSONB may return as strings
-    function num(v: unknown, fallback: number): number {
-      const n = Number(v);
-      return isNaN(n) ? fallback : n;
-    }
+  const images = useMemo<CanvasImageData[]>(() =>
+    elements
+      .filter((e) => e.type === 'image')
+      .map((e) => ({ ...e.data, id: e.id } as CanvasImageData)),
+    [elements]
+  );
 
-    for (const el of els) {
-      const d = el.data as Record<string, unknown>;
-      switch (el.type) {
-        case 'sticky_note':
-          loadedNotes.push({
-            ...d, id: el.id, isEditing: false,
-            x: num(d.x, 0), y: num(d.y, 0), width: num(d.width, 320),
-          } as StickyNoteData);
-          break;
-        case 'text':
-          loadedTexts.push({
-            ...d, id: el.id, isEditing: false,
-            x: num(d.x, 0), y: num(d.y, 0), fontSize: num(d.fontSize, 28), rotation: num(d.rotation, 0),
-          } as CanvasTextData);
-          break;
-        case 'image':
-          loadedImages.push({
-            ...d, id: el.id,
-            x: num(d.x, 0), y: num(d.y, 0), width: num(d.width, 300), height: num(d.height, 200),
-            rotation: num(d.rotation, 0), naturalWidth: num(d.naturalWidth, 300), naturalHeight: num(d.naturalHeight, 200),
-          } as CanvasImageData);
-          break;
-        case 'text_button':
-          loadedTextButtons.push({
-            ...d, id: el.id, isEditing: false,
-            x: num(d.x, 0), y: num(d.y, 0), fontSize: num(d.fontSize, 28), rotation: num(d.rotation, 0),
-          } as CanvasTextButtonData);
-          break;
-        case 'image_button':
-          loadedImageButtons.push({
-            ...d, id: el.id, isEditing: false,
-            x: num(d.x, 0), y: num(d.y, 0), width: num(d.width, 200), height: num(d.height, 200),
-            naturalWidth: num(d.naturalWidth, 200), naturalHeight: num(d.naturalHeight, 200),
-          } as CanvasImageButtonData);
-          break;
-      }
-    }
-    return { loadedNotes, loadedTexts, loadedImages, loadedTextButtons, loadedImageButtons };
-  }, []);
+  const textButtons = useMemo<CanvasTextButtonData[]>(() =>
+    elements
+      .filter((e) => e.type === 'text_button')
+      .map((e) => ({ ...e.data, id: e.id } as CanvasTextButtonData)),
+    [elements]
+  );
 
-  // Initial hydration
-  const hydrated = useRef(false);
-  useEffect(() => {
-    if (isLoading || !isAdminResolved || hydrated.current) return;
-    hydrated.current = true;
+  const imageButtons = useMemo<CanvasImageButtonData[]>(() =>
+    elements
+      .filter((e) => e.type === 'image_button')
+      .map((e) => ({ ...e.data, id: e.id } as CanvasImageButtonData)),
+    [elements]
+  );
 
-    const { loadedNotes, loadedTexts, loadedImages, loadedTextButtons, loadedImageButtons } = parseDbElements(dbElements);
+  // ─── Add handlers ───
 
-    if (loadedNotes.length) setNotes(loadedNotes);
-    if (loadedTexts.length) setTexts(loadedTexts);
-    if (loadedImages.length) setImages(loadedImages);
-    if (loadedTextButtons.length) setTextButtons(loadedTextButtons);
-    if (loadedImageButtons.length) setImageButtons(loadedImageButtons);
-
-    // Pre-populate prev refs so sync effects don't treat hydrated data as new
-    prevNotesRef.current = loadedNotes;
-    prevTextsRef.current = loadedTexts;
-    prevImagesRef.current = loadedImages;
-    prevTextBtnsRef.current = loadedTextButtons;
-    prevImgBtnsRef.current = loadedImageButtons;
-  }, [isLoading, isAdminResolved, dbElements, setNotes, setTexts, setImages, setTextButtons, setImageButtons, parseDbElements]);
-
-  // Live sync: for non-admin visitors, update local state whenever polled data changes
-  // We track the last DB snapshot by serialized element map to avoid unnecessary updates
-  const lastDbSnapshotRef = useRef('');
-  useEffect(() => {
-    if (!hydrated.current || isAdmin) return;
-
-    // Build a lightweight fingerprint of the current DB elements
-    const snapshot = dbElements.map((e) => `${e.id}:${e.updated_at}`).join('|');
-    if (snapshot === lastDbSnapshotRef.current) return;
-    lastDbSnapshotRef.current = snapshot;
-
-    const { loadedNotes, loadedTexts, loadedImages, loadedTextButtons, loadedImageButtons } = parseDbElements(dbElements);
-
-    setNotes(loadedNotes);
-    setTexts(loadedTexts);
-    setImages(loadedImages);
-    setTextButtons(loadedTextButtons);
-    setImageButtons(loadedImageButtons);
-  }, [dbElements, isAdmin, setNotes, setTexts, setImages, setTextButtons, setImageButtons, parseDbElements]);
-
-  // --- DB sync wrappers ---
-
-  // Ref to track which IDs exist in DB — used by sync effects without causing re-runs
-  const dbIdsRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    dbIdsRef.current = new Set(dbElements.map((e) => e.id));
-  }, [dbElements]);
-
-  // Debounce refs for updates
-  const updateTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  const latestData = useRef<Map<string, Record<string, unknown>>>(new Map());
-
-  useEffect(() => {
-    return () => {
-      updateTimers.current.forEach((t) => clearTimeout(t));
-    };
-  }, []);
-
-  const dbSyncUpdate = useCallback((id: string, type: string, fullData: Record<string, unknown>) => {
-    latestData.current.set(id, fullData);
-    const existing = updateTimers.current.get(id);
-    if (existing) clearTimeout(existing);
-    const timer = setTimeout(() => {
-      updateTimers.current.delete(id);
-      const data = latestData.current.get(id);
-      latestData.current.delete(id);
-      if (data) {
-        // Strip isEditing from persisted data
-        const { isEditing, ...rest } = data as Record<string, unknown> & { isEditing?: boolean };
-        updateElement(id, rest);
-      }
-    }, 500);
-    updateTimers.current.set(id, timer);
-  }, [updateElement]);
-
-  // --- Wrapped handlers for sticky notes ---
   const handleAddNote = useCallback((x: number, y: number) => {
-    const id = addNote(x, y);
-    // We'll persist when locked (not while editing)
+    const id = crypto.randomUUID();
+    addElement({
+      id, type: 'sticky_note', z_index: 10,
+      data: {
+        x, y, width: 320, color: randomNoteColor(),
+        topText: '', topBold: false, topItalic: false, topCenter: false,
+        bottomText: '', bottomBold: false, bottomItalic: false, bottomCenter: false,
+        imageUrl: null, mediaType: null, isEditing: true,
+      },
+    });
     return id;
-  }, [addNote]);
+  }, [addElement]);
+
+  const handleAddText = useCallback((x: number, y: number) => {
+    const id = crypto.randomUUID();
+    addElement({
+      id, type: 'text', z_index: 5,
+      data: {
+        x, y, text: '', color: '#292524', fontSize: 28,
+        bold: false, rotation: 0, isEditing: true,
+      },
+    });
+    return id;
+  }, [addElement]);
+
+  const handleAddTextButton = useCallback((x: number, y: number) => {
+    const id = crypto.randomUUID();
+    addElement({
+      id, type: 'text_button', z_index: 5,
+      data: {
+        x, y, text: '', href: '', color: '#292524', fontSize: 28,
+        bold: false, rotation: 0, isEditing: true,
+      },
+    });
+    return id;
+  }, [addElement]);
+
+  const handleImageUpload = useCallback((file: File) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const cx = -offsetX.get() + window.innerWidth / 2;
+      const cy = -offsetY.get() + window.innerHeight / 2;
+      const displayWidth = 300;
+      const displayHeight = (img.naturalHeight / img.naturalWidth) * displayWidth;
+      const id = crypto.randomUUID();
+      addElement({
+        id, type: 'image', z_index: 8,
+        data: {
+          x: cx - displayWidth / 2, y: cy - displayHeight / 2,
+          width: displayWidth, height: displayHeight, rotation: 0,
+          src: url, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight,
+        },
+      }, true); // persist immediately — images don't have an editing state
+    };
+    img.src = url;
+  }, [addElement]);
+
+  const handleImageButtonUpload = useCallback((file: File) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const cx = -offsetX.get() + window.innerWidth / 2;
+      const cy = -offsetY.get() + window.innerHeight / 2;
+      const displayWidth = 200;
+      const displayHeight = (img.naturalHeight / img.naturalWidth) * displayWidth;
+      const id = crypto.randomUUID();
+      addElement({
+        id, type: 'image_button', z_index: 8,
+        data: {
+          x: cx - displayWidth / 2, y: cy - displayHeight / 2,
+          width: displayWidth, height: displayHeight,
+          src: url, href: '', naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight,
+          isEditing: true,
+        },
+      });
+    };
+    img.src = url;
+  }, [addElement]);
+
+  // ─── Update handlers (pass-through to updateElement) ───
 
   const handleUpdateNote = useCallback((id: string, updates: Partial<StickyNoteData>) => {
-    updateNote(id, updates);
-    // Find the full note to sync
-    setTimeout(() => {
-      // Use a microtask to get the updated state
-    }, 0);
-  }, [updateNote]);
+    updateElement(id, updates as Record<string, unknown>);
+  }, [updateElement]);
 
-  // Sync notes to DB when they change from editing to locked
-  useEffect(() => {
-    if (!hydrated.current || !isAdminResolved || !isAdmin) return;
-    const prev = prevNotesRef.current;
-    for (const note of notes) {
-      const prevNote = prev.find((n) => n.id === note.id);
-      if (!prevNote) {
-        // New note — persist when locked
-        if (!note.isEditing) {
-          const { isEditing, ...data } = note;
-          addElement({ id: note.id, type: 'sticky_note', data, z_index: 10 });
-        }
-      } else if (prevNote.isEditing && !note.isEditing) {
-        // Just locked — persist
-        const { isEditing, ...data } = note;
-        // Check if this element exists in DB already
-        if (dbIdsRef.current.has(note.id)) {
-          const { isEditing: _, ...rest } = note;
-          dbSyncUpdate(note.id, 'sticky_note', rest);
-        } else {
-          addElement({ id: note.id, type: 'sticky_note', data, z_index: 10 });
-        }
-      } else if (!note.isEditing && prevNote && !prevNote.isEditing) {
-        // Already locked, data changed (e.g. drag, tilt) — debounced sync
-        if (JSON.stringify(note) !== JSON.stringify(prevNote)) {
-          const { isEditing, ...data } = note;
-          dbSyncUpdate(note.id, 'sticky_note', data);
-        }
-      }
+  const handleUpdateText = useCallback((id: string, updates: Partial<CanvasTextData>) => {
+    updateElement(id, updates as Record<string, unknown>);
+  }, [updateElement]);
+
+  const handleUpdateImage = useCallback((id: string, updates: Partial<CanvasImageData>) => {
+    updateElement(id, updates as Record<string, unknown>);
+  }, [updateElement]);
+
+  const handleUpdateTextButton = useCallback((id: string, updates: Partial<CanvasTextButtonData>) => {
+    updateElement(id, updates as Record<string, unknown>);
+  }, [updateElement]);
+
+  const handleUpdateImageButton = useCallback((id: string, updates: Partial<CanvasImageButtonData>) => {
+    updateElement(id, updates as Record<string, unknown>);
+  }, [updateElement]);
+
+  // ─── Lock handlers (isEditing → false, then persist) ───
+
+  const handleLockNote = useCallback((id: string) => {
+    updateElement(id, { isEditing: false });
+    persistElement(id);
+  }, [updateElement, persistElement]);
+
+  const handleLockText = useCallback((id: string) => {
+    const el = elementsRef.current.find((e) => e.id === id);
+    if (el && !(el.data.text as string)?.trim()) {
+      removeElement(id);
+      return;
     }
-    prevNotesRef.current = notes;
-  }, [notes, addElement, dbSyncUpdate]);
+    updateElement(id, { isEditing: false });
+    persistElement(id);
+  }, [updateElement, persistElement, removeElement]);
 
-  // Sync texts to DB
-  useEffect(() => {
-    if (!hydrated.current || !isAdminResolved || !isAdmin) return;
-    const prev = prevTextsRef.current;
-    for (const text of texts) {
-      const prevText = prev.find((t) => t.id === text.id);
-      if (!prevText) {
-        if (!text.isEditing) {
-          const { isEditing, ...data } = text;
-          addElement({ id: text.id, type: 'text', data, z_index: 5 });
-        }
-      } else if (prevText.isEditing && !text.isEditing) {
-        const { isEditing, ...data } = text;
-        if (dbIdsRef.current.has(text.id)) {
-          dbSyncUpdate(text.id, 'text', data);
-        } else {
-          addElement({ id: text.id, type: 'text', data, z_index: 5 });
-        }
-      } else if (!text.isEditing && !prevText.isEditing) {
-        if (JSON.stringify(text) !== JSON.stringify(prevText)) {
-          const { isEditing, ...data } = text;
-          dbSyncUpdate(text.id, 'text', data);
-        }
-      }
+  const handleLockTextButton = useCallback((id: string) => {
+    const el = elementsRef.current.find((e) => e.id === id);
+    if (el && !(el.data.text as string)?.trim()) {
+      removeElement(id);
+      return;
     }
-    prevTextsRef.current = texts;
-  }, [texts, addElement, dbSyncUpdate]);
+    updateElement(id, { isEditing: false });
+    persistElement(id);
+  }, [updateElement, persistElement, removeElement]);
 
-  // Sync images to DB
-  useEffect(() => {
-    if (!hydrated.current || !isAdminResolved || !isAdmin) return;
-    const prev = prevImagesRef.current;
-    for (const img of images) {
-      const prevImg = prev.find((i) => i.id === img.id);
-      if (!prevImg) {
-        addElement({ id: img.id, type: 'image', data: { ...img }, z_index: 8 });
-      } else if (JSON.stringify(img) !== JSON.stringify(prevImg)) {
-        dbSyncUpdate(img.id, 'image', { ...img });
-      }
-    }
-    prevImagesRef.current = images;
-  }, [images, addElement, dbSyncUpdate]);
+  const handleLockImageButton = useCallback((id: string) => {
+    updateElement(id, { isEditing: false });
+    persistElement(id);
+  }, [updateElement, persistElement]);
 
-  // Sync text buttons to DB
-  useEffect(() => {
-    if (!hydrated.current || !isAdminResolved || !isAdmin) return;
-    const prev = prevTextBtnsRef.current;
-    for (const btn of textButtons) {
-      const prevBtn = prev.find((b) => b.id === btn.id);
-      if (!prevBtn) {
-        if (!btn.isEditing) {
-          const { isEditing, ...data } = btn;
-          addElement({ id: btn.id, type: 'text_button', data, z_index: 5 });
-        }
-      } else if (prevBtn.isEditing && !btn.isEditing) {
-        const { isEditing, ...data } = btn;
-        if (dbIdsRef.current.has(btn.id)) {
-          dbSyncUpdate(btn.id, 'text_button', data);
-        } else {
-          addElement({ id: btn.id, type: 'text_button', data, z_index: 5 });
-        }
-      } else if (!btn.isEditing && !prevBtn.isEditing) {
-        if (JSON.stringify(btn) !== JSON.stringify(prevBtn)) {
-          const { isEditing, ...data } = btn;
-          dbSyncUpdate(btn.id, 'text_button', data);
-        }
-      }
-    }
-    prevTextBtnsRef.current = textButtons;
-  }, [textButtons, addElement, dbSyncUpdate]);
+  // ─── Delete handlers ───
 
-  // Sync image buttons to DB
-  useEffect(() => {
-    if (!hydrated.current || !isAdminResolved || !isAdmin) return;
-    const prev = prevImgBtnsRef.current;
-    for (const btn of imageButtons) {
-      const prevBtn = prev.find((b) => b.id === btn.id);
-      if (!prevBtn) {
-        if (!btn.isEditing) {
-          const { isEditing, ...data } = btn;
-          addElement({ id: btn.id, type: 'image_button', data, z_index: 8 });
-        }
-      } else if (prevBtn.isEditing && !btn.isEditing) {
-        const { isEditing, ...data } = btn;
-        if (dbIdsRef.current.has(btn.id)) {
-          dbSyncUpdate(btn.id, 'image_button', data);
-        } else {
-          addElement({ id: btn.id, type: 'image_button', data, z_index: 8 });
-        }
-      } else if (!btn.isEditing && !prevBtn.isEditing) {
-        if (JSON.stringify(btn) !== JSON.stringify(prevBtn)) {
-          const { isEditing, ...data } = btn;
-          dbSyncUpdate(btn.id, 'image_button', data);
-        }
-      }
-    }
-    prevImgBtnsRef.current = imageButtons;
-  }, [imageButtons, addElement, dbSyncUpdate]);
+  const handleDeleteNote = useCallback((id: string) => { removeElement(id); }, [removeElement]);
+  const handleDeleteText = useCallback((id: string) => { removeElement(id); }, [removeElement]);
+  const handleDeleteImage = useCallback((id: string) => { removeElement(id); }, [removeElement]);
+  const handleDeleteTextButton = useCallback((id: string) => { removeElement(id); }, [removeElement]);
+  const handleDeleteImageButton = useCallback((id: string) => { removeElement(id); }, [removeElement]);
 
-  // Sync deletions — check if any prev elements are gone from current arrays
-  useEffect(() => {
-    if (!hydrated.current || !isAdminResolved || !isAdmin) return;
-    // Handled by handleDelete* wrappers — they call removeElement directly
-  }, []);
+  // ─── Canvas panning ───
 
   const offsetX = useMotionValue(0);
   const offsetY = useMotionValue(0);
@@ -343,35 +231,12 @@ export default function HomeContent() {
   const rulesRef = useRef<HTMLDivElement>(null);
   const [panLimitPos, setPanLimitPos] = useState<{ x: number; y: number } | null>(null);
 
-  // Disable cartoon cursors when dev menu open or in dev modes
   const disableCursors = devMenuOpen || mode === 'place' || mode === 'text' || mode === 'textbtn' || mode === 'imgbtn';
 
   const handleCursorChange = useCallback((cursor: string | null) => {
     pencilActiveRef.current = cursor === "pencil";
     setActiveCursor(cursor);
   }, []);
-
-  const handleImageUpload = useCallback((file: File) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const cx = -offsetX.get() + window.innerWidth / 2;
-      const cy = -offsetY.get() + window.innerHeight / 2;
-      addImage(url, img.naturalWidth, img.naturalHeight, cx, cy);
-    };
-    img.src = url;
-  }, [addImage, offsetX, offsetY]);
-
-  const handleImageButtonUpload = useCallback((file: File) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const cx = -offsetX.get() + window.innerWidth / 2;
-      const cy = -offsetY.get() + window.innerHeight / 2;
-      addImageButton(url, img.naturalWidth, img.naturalHeight, '', cx, cy);
-    };
-    img.src = url;
-  }, [addImageButton, offsetX, offsetY]);
 
   const getCursor = useCallback(() => {
     if (mode === 'place' || mode === 'text' || mode === 'textbtn') return 'crosshair';
@@ -436,62 +301,19 @@ export default function HomeContent() {
       if (notes.some((n) => n.isEditing)) return;
       const x = e.clientX - offsetX.get() - 160;
       const y = e.clientY - offsetY.get() - 20;
-      addNote(x, y);
+      handleAddNote(x, y);
     } else if (mode === 'text') {
       if (texts.some((t) => t.isEditing)) return;
       const x = e.clientX - offsetX.get();
       const y = e.clientY - offsetY.get();
-      addText(x, y);
+      handleAddText(x, y);
     } else if (mode === 'textbtn') {
       if (textButtons.some((b) => b.isEditing)) return;
       const x = e.clientX - offsetX.get();
       const y = e.clientY - offsetY.get();
-      addTextButton(x, y);
+      handleAddTextButton(x, y);
     }
   };
-
-  // Delete wrappers that also remove from DB
-  const handleDeleteNote = useCallback((id: string) => {
-    deleteNote(id);
-    removeElement(id);
-  }, [deleteNote, removeElement]);
-
-  const handleDeleteText = useCallback((id: string) => {
-    deleteText(id);
-    removeElement(id);
-  }, [deleteText, removeElement]);
-
-  const handleDeleteImage = useCallback((id: string) => {
-    deleteImage(id);
-    removeElement(id);
-  }, [deleteImage, removeElement]);
-
-  const handleDeleteTextButton = useCallback((id: string) => {
-    deleteTextButton(id);
-    removeElement(id);
-  }, [deleteTextButton, removeElement]);
-
-  const handleDeleteImageButton = useCallback((id: string) => {
-    deleteImageButton(id);
-    removeElement(id);
-  }, [deleteImageButton, removeElement]);
-
-  // Lock text also removes empty texts — sync deletion to DB
-  const handleLockText = useCallback((id: string) => {
-    const text = texts.find((t) => t.id === id);
-    lockText(id);
-    if (text && !text.text.trim()) {
-      removeElement(id);
-    }
-  }, [lockText, texts, removeElement]);
-
-  const handleLockTextButton = useCallback((id: string) => {
-    const btn = textButtons.find((b) => b.id === id);
-    lockTextButton(id);
-    if (btn && !btn.text.trim()) {
-      removeElement(id);
-    }
-  }, [lockTextButton, textButtons, removeElement]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -574,7 +396,6 @@ export default function HomeContent() {
           <DevButton mode={mode} onModeChange={setMode} onOpenChange={setDevMenuOpen} onImageUpload={handleImageUpload} onImageButtonUpload={handleImageButtonUpload} />
         )}
 
-
         {/* Layer 1: Blue ruled lines */}
         <div
           ref={rulesRef}
@@ -634,7 +455,7 @@ export default function HomeContent() {
             <CanvasImage
               key={img.id}
               data={img}
-              onUpdate={updateImage}
+              onUpdate={handleUpdateImage}
               onDelete={handleDeleteImage}
               disabled={!!activeCursor}
               readOnly={!isAdmin}
@@ -647,7 +468,7 @@ export default function HomeContent() {
               <CanvasText
                 key={t.id}
                 data={t}
-                onUpdate={updateText}
+                onUpdate={handleUpdateText}
                 onLock={handleLockText}
                 onDelete={handleDeleteText}
                 disabled={!!activeCursor}
@@ -662,7 +483,7 @@ export default function HomeContent() {
               <CanvasTextButton
                 key={b.id}
                 data={b}
-                onUpdate={updateTextButton}
+                onUpdate={handleUpdateTextButton}
                 onLock={handleLockTextButton}
                 onDelete={handleDeleteTextButton}
                 disabled={activeCursor === 'pencil'}
@@ -677,8 +498,8 @@ export default function HomeContent() {
             <CanvasImageButton
               key={b.id}
               data={b}
-              onUpdate={updateImageButton}
-              onLock={lockImageButton}
+              onUpdate={handleUpdateImageButton}
+              onLock={handleLockImageButton}
               onDelete={handleDeleteImageButton}
               disabled={activeCursor === 'pencil'}
               devMode={devMenuOpen}
@@ -693,8 +514,8 @@ export default function HomeContent() {
               <StickyNote
                 key={note.id}
                 note={note}
-                onUpdate={updateNote}
-                onLock={lockNote}
+                onUpdate={handleUpdateNote}
+                onLock={handleLockNote}
                 onDelete={handleDeleteNote}
                 cursorMode={activeCursor}
                 devMode={devMenuOpen}
