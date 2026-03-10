@@ -22,6 +22,7 @@ interface PencilCanvasProps {
   offsetY: MotionValue<number>;
   isActive: boolean;
   isAdmin: boolean;
+  devDrawMode?: boolean; // dev toggle — draw anywhere
   strokes?: PencilStroke[];
   onStrokeComplete?: (stroke: PencilStroke) => void;
 }
@@ -113,6 +114,7 @@ export function PencilCanvas({
   offsetY,
   isActive,
   isAdmin,
+  devDrawMode,
   strokes,
   onStrokeComplete,
 }: PencilCanvasProps) {
@@ -287,6 +289,9 @@ export function PencilCanvas({
 
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
+
+      // Pencil button mode: constrain to original range (world y 0–4000 = canvas-local y 2000–6000)
+      if (!devDrawMode && y < -CANVAS_Y_OFFSET) return;
 
       const isMouse = e.pointerType === "mouse";
       const pressure = isMouse ? 0.45 : Math.max(0.1, e.pressure);

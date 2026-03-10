@@ -510,6 +510,7 @@ export default function HomeContent() {
             offsetY={offsetY}
             isActive={activeCursor === 'pencil' || drawMode}
             isAdmin={isAdmin}
+            devDrawMode={drawMode}
             strokes={pencilStrokes}
             onStrokeComplete={handleStrokeComplete}
           />
