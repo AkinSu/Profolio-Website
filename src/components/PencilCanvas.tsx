@@ -310,7 +310,7 @@ export function PencilCanvas({
       }
       needsRender.current = true;
     },
-    [isActive, isAdmin, stamp]
+    [isActive, isAdmin, devDrawMode, stamp]
   );
 
   const handlePointerMove = useCallback(
@@ -365,7 +365,7 @@ export function PencilCanvas({
 
       needsRender.current = true;
     },
-    [stamp]
+    [devDrawMode, stamp]
   );
 
   const handlePointerUp = useCallback(
