@@ -156,7 +156,7 @@ export function PencilCanvas({
       const scaleY = baseScale * (1 - tiltNorm * 0.3);
 
       // Opacity: pressure affects darkness heavily + jitter + grain + tilt
-      const baseAlpha = 0.12 + pt.pressure * 0.45;
+      const baseAlpha = 0.20 + pt.pressure * 0.60;
       const jitter = 0.9 + Math.random() * 0.1;
       const alpha = baseAlpha * jitter * grainMultiplier * (1 - tiltNorm * 0.4);
 
