@@ -102,7 +102,7 @@ function getStampPoints(prev: Point, curr: Point, spacing = STAMP_SPACING): Poin
 function pressureFromSpeed(dx: number, dy: number, dt: number): number {
   if (dt <= 0) return 0.45;
   const speed = Math.sqrt(dx * dx + dy * dy) / dt;
-  return Math.max(0.2, Math.min(0.7, 0.7 - speed * 0.25));
+  return Math.max(0.1, Math.min(0.8, 0.8 - speed * 0.5));
 }
 
 // ─── Component ───
@@ -217,7 +217,7 @@ export function PencilCanvas({
     for (let i = startIdx; i < strokes.length; i++) {
       tempCtx.clearRect(0, 0, CANVAS_W, CANVAS_H);
       renderStroke(tempCtx, strokes[i]);
-      ctx.globalAlpha = 0.85;
+      ctx.globalAlpha = 1.0;
       ctx.drawImage(tempStroke, 0, 0);
       ctx.globalAlpha = 1.0;
     }
@@ -253,7 +253,7 @@ export function PencilCanvas({
       ctx.drawImage(committed, 0, 0);
 
       if (isDrawing.current) {
-        ctx.globalAlpha = 0.85;
+        ctx.globalAlpha = 1.0;
         ctx.drawImage(temp, 0, 0);
         ctx.globalAlpha = 1.0;
       }
@@ -374,7 +374,7 @@ export function PencilCanvas({
       if (committed && temp) {
         const ctx = committed.getContext("2d");
         if (ctx) {
-          ctx.globalAlpha = 0.85;
+          ctx.globalAlpha = 1.0;
           ctx.drawImage(temp, 0, 0);
           ctx.globalAlpha = 1.0;
         }
