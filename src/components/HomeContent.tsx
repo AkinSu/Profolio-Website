@@ -14,6 +14,7 @@ import { CanvasImageData } from "@/hooks/useCanvasImages";
 import { CanvasTextButton } from "@/components/CanvasTextButton";
 import { CanvasImageButton } from "@/components/CanvasImageButton";
 import { CanvasTextButtonData, CanvasImageButtonData } from "@/hooks/useCanvasButtons";
+import { PencilCanvas, PencilStroke } from "@/components/PencilCanvas";
 import { useCanvasElements, CanvasElement } from "@/hooks/useCanvasElements";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { uploadFiles } from "@/lib/uploadthing";
@@ -29,6 +30,11 @@ export default function HomeContent() {
   const [activeCursor, setActiveCursor] = useState<string | null>(null);
   const pencilActiveRef = useRef(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [pencilStrokes, setPencilStrokes] = useState<PencilStroke[]>([]);
+
+  const handleStrokeComplete = useCallback((stroke: PencilStroke) => {
+    setPencilStrokes((prev) => [...prev, stroke]);
+  }, []);
 
   // ─── Single source of truth ───
   const {
@@ -494,6 +500,16 @@ export default function HomeContent() {
               pointerEvents: "none",
               zIndex: 1,
             }}
+          />
+
+          {/* Pencil drawings */}
+          <PencilCanvas
+            offsetX={offsetX}
+            offsetY={offsetY}
+            isActive={activeCursor === 'pencil'}
+            isAdmin={isAdmin}
+            strokes={pencilStrokes}
+            onStrokeComplete={handleStrokeComplete}
           />
 
           {/* Canvas images */}
