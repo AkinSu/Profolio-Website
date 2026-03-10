@@ -29,7 +29,7 @@ export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onI
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && file.type === 'image/png') {
+    if (file && (file.type === 'image/png' || file.type === 'image/gif')) {
       onImageUpload?.(file);
     }
     e.target.value = '';
@@ -37,7 +37,7 @@ export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onI
 
   const handleImgBtnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && file.type === 'image/png') {
+    if (file && (file.type === 'image/png' || file.type === 'image/gif')) {
       onImageButtonUpload?.(file);
     }
     e.target.value = '';
@@ -125,12 +125,12 @@ export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onI
                   e.currentTarget.style.color = "rgba(255,255,255,0.6)";
                 }}
               >
-                🖼️ image (.png)
+                🖼️ image (.png/.gif)
               </button>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/png"
+                accept="image/png,image/gif"
                 onChange={handleFileChange}
                 style={{ display: 'none' }}
               />
@@ -185,7 +185,7 @@ export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onI
                 <input
                   ref={imgBtnInputRef}
                   type="file"
-                  accept="image/png"
+                  accept="image/png,image/gif"
                   onChange={handleImgBtnChange}
                   style={{ display: 'none' }}
                 />
