@@ -312,19 +312,21 @@ export function PaperCrumple({ onComplete }: PaperCrumpleProps) {
       style={{ position: "fixed", inset: 0, zIndex: 9999, cursor: written && !crumpling ? "pointer" : "default" }}
       onClick={handleClick}
     >
-      {/* Paper background — always visible, shows through chroma key transparency */}
-      <div
-        style={{
-          position: "absolute", inset: 0,
-          backgroundColor: "#f5f5f0",
-          backgroundImage: `
-            repeating-linear-gradient(transparent, transparent 31px, rgba(140,180,220,0.25) 31px, rgba(140,180,220,0.25) 32px),
-            linear-gradient(90deg, transparent 11.5%, rgba(220,80,80,0.3) 11.5%, rgba(220,80,80,0.3) 12%, transparent 12%)
-          `,
-          backgroundSize: "100% 32px, 100% 100%",
-          backgroundPosition: "0 48px, 0 0",
-        }}
-      />
+      {/* Paper background — visible until crumple starts, then actual canvas shows through chroma key */}
+      {!crumpling && (
+        <div
+          style={{
+            position: "absolute", inset: 0,
+            backgroundColor: "#f5f5f0",
+            backgroundImage: `
+              repeating-linear-gradient(transparent, transparent 31px, rgba(140,180,220,0.25) 31px, rgba(140,180,220,0.25) 32px),
+              linear-gradient(90deg, transparent 11.5%, rgba(220,80,80,0.3) 11.5%, rgba(220,80,80,0.3) 12%, transparent 12%)
+            `,
+            backgroundSize: "100% 32px, 100% 100%",
+            backgroundPosition: "0 48px, 0 0",
+          }}
+        />
+      )}
 
       {/* SVG handwriting animation */}
       {!crumpling && (

@@ -531,6 +531,7 @@ export default function HomeContent() {
         <Navigation
           onCursorChange={handleCursorChange}
           disableCursors={disableCursors}
+          show={overlayDone}
         />
         {isAdmin && (
           <DevButton mode={mode} onModeChange={setMode} onOpenChange={setDevMenuOpen} onImageUpload={handleImageUpload} onImageButtonUpload={handleImageButtonUpload} drawMode={drawMode} onDrawModeChange={setDrawMode} onClearDrawings={handleClearDrawings} />

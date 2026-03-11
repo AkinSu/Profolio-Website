@@ -88,9 +88,10 @@ const navItems = [
 interface NavigationProps {
   onCursorChange?: (cursor: string | null) => void;
   disableCursors?: boolean;
+  show?: boolean;
 }
 
-export function Navigation({ onCursorChange, disableCursors }: NavigationProps) {
+export function Navigation({ onCursorChange, disableCursors, show = true }: NavigationProps) {
   // "hand" is the default cursor mode
   const [cursorMode, setCursorMode] = useState<string>("hand");
 
@@ -202,7 +203,7 @@ export function Navigation({ onCursorChange, disableCursors }: NavigationProps) 
       py={3}
       style={{ pointerEvents: 'none' }}
       initial={{ y: -100, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
+      animate={show ? { y: 0, opacity: 1 } : { y: -100, opacity: 0 }}
       transition={{ duration: 0.8, ease: "easeOut" }}
     >
       <Flex justify="center" align="center" maxW="1400px" mx="auto">
