@@ -53,7 +53,7 @@ interface HandDrawnButtonProps {
 
 const HandDrawnButton = ({ imageSrc, alt, imageScale = 1, onClick }: HandDrawnButtonProps) => (
   <button
-    style={{ position: "relative", width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center", outline: "none", zIndex: 10 }}
+    style={{ position: "relative", width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center", outline: "none", zIndex: 10, pointerEvents: "auto" }}
     className="transition-all duration-150 ease-out drop-shadow-[2px_2px_0_rgba(0,0,0,0.12)] hover:translate-y-px hover:scale-[0.97] active:-translate-y-px active:scale-[1.03]"
     aria-label={alt}
     onClick={onClick}
@@ -200,6 +200,7 @@ export function Navigation({ onCursorChange, disableCursors }: NavigationProps) 
       zIndex={100}
       px={8}
       py={3}
+      style={{ pointerEvents: 'none' }}
       initial={{ y: -100, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.8, ease: "easeOut" }}
