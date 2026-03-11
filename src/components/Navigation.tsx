@@ -204,20 +204,7 @@ export function Navigation({ onCursorChange, disableCursors }: NavigationProps) 
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.8, ease: "easeOut" }}
     >
-      <Flex justify="space-between" align="center" maxW="1400px" mx="auto">
-        {/* Left: Logo */}
-        <MotionText
-          fontSize="xl"
-          fontWeight="bold"
-          color="gray.800"
-          style={{ fontFamily: "'PaperHand', cursive" }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-        >
-          Akintunji Sule
-        </MotionText>
-
+      <Flex justify="center" align="center" maxW="1400px" mx="auto">
         {/* Center: Hand-drawn buttons */}
         <div style={{ position: "relative", width: 230, height: 110, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <Image
@@ -231,10 +218,9 @@ export function Navigation({ onCursorChange, disableCursors }: NavigationProps) 
           <HandDrawnButton imageSrc="/hand.png" alt="Hand" imageScale={1} onClick={handleHandClick} />
           <ConnectionLine />
           <HandDrawnButton imageSrc="/pencil.png" alt="Pencil" imageScale={2.5} onClick={handlePencilClick} />
-
         </div>
 
-        {/* Right: Nav links */}
+        {/* Nav links (commented out for now)
         <HStack gap={8}>
           {navItems.map((item, i) => (
             <MotionBox
@@ -259,6 +245,7 @@ export function Navigation({ onCursorChange, disableCursors }: NavigationProps) 
             </MotionBox>
           ))}
         </HStack>
+        */}
       </Flex>
     </MotionBox>
   );
