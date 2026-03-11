@@ -28,7 +28,7 @@ export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onI
 
   const toggleOpen = () => {
     setOpen((o) => !o);
-    if (open) { onModeChange('pan'); setConfirmClear(false); }
+    if (open) { onModeChange('pan'); setConfirmClear(false); onDrawModeChange?.(false); }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
