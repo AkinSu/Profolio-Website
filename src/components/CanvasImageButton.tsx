@@ -29,8 +29,8 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
   const [isHovered, setIsHovered] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Derive link mode from data
-  const linkMode = data.linkedElementId ? 'element' : 'url';
+  // Track link mode as local state so the toggle works even when both fields are empty
+  const [linkMode, setLinkMode] = useState<'url' | 'element'>(data.linkedElementId ? 'element' : 'url');
   const hasLink = !!(data.href || data.linkedElementId);
 
   // Click-outside to deselect / lock
@@ -241,13 +241,13 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
           {/* Link type toggle */}
           <div style={{ display: 'flex', gap: 4 }}>
             <button
-              onClick={() => onUpdate(data.id, { linkedElementId: '', href: data.href || '' })}
+              onClick={() => { setLinkMode('url'); onUpdate(data.id, { linkedElementId: '' }); }}
               style={segBtn(linkMode === 'url')}
             >
               URL
             </button>
             <button
-              onClick={() => onUpdate(data.id, { href: '', linkedElementId: data.linkedElementId || '' })}
+              onClick={() => { setLinkMode('element'); onUpdate(data.id, { href: '' }); }}
               style={segBtn(linkMode === 'element')}
             >
               Element

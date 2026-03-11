@@ -35,8 +35,8 @@ export function CanvasTextButton({ data, onUpdate, onLock, onDelete, disabled, d
     startY: number;
   } | null>(null);
 
-  // Derive link mode from data
-  const linkMode = data.linkedElementId ? 'element' : 'url';
+  // Track link mode as local state so the toggle works even when both fields are empty
+  const [linkMode, setLinkMode] = useState<'url' | 'element'>(data.linkedElementId ? 'element' : 'url');
 
   useEffect(() => {
     if (data.isEditing && inputRef.current) {
@@ -318,13 +318,13 @@ export function CanvasTextButton({ data, onUpdate, onLock, onDelete, disabled, d
           {/* Link type toggle */}
           <div style={{ display: 'flex', gap: 4, marginBottom: 2 }}>
             <button
-              onClick={() => onUpdate(data.id, { linkedElementId: '', href: data.href || '' })}
+              onClick={() => { setLinkMode('url'); onUpdate(data.id, { linkedElementId: '' }); }}
               style={segBtn(linkMode === 'url')}
             >
               URL
             </button>
             <button
-              onClick={() => onUpdate(data.id, { href: '', linkedElementId: data.linkedElementId || '' })}
+              onClick={() => { setLinkMode('element'); onUpdate(data.id, { href: '' }); }}
               style={segBtn(linkMode === 'element')}
             >
               Element
