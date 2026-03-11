@@ -440,6 +440,8 @@ export default function HomeContent() {
     return () => window.removeEventListener('keydown', handleKey);
   }, []);
 
+  console.log("[HomeContent] about to render, overlayDone:", overlayDone);
+
   return (
     <>
       <IntroAnimation onComplete={() => setOverlayDone(true)} />
