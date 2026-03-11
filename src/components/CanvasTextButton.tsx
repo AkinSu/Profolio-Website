@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { XIcon, BoldIcon, RotateCwIcon, MoveIcon, LinkIcon, AArrowUpIcon, Link2OffIcon } from 'lucide-react';
 import { CanvasTextButtonData, BUTTON_COLORS } from '../hooks/useCanvasButtons';
+import { sanitizeUrl } from '@/lib/sanitizeUrl';
 
 interface LinkableElement {
   id: string;
@@ -154,7 +155,7 @@ export function CanvasTextButton({ data, onUpdate, onLock, onDelete, disabled, d
         return;
       }
       if (data.href) {
-        window.open(data.href, '_blank', 'noopener,noreferrer');
+        { const safe = sanitizeUrl(data.href); if (safe) window.open(safe, '_blank', 'noopener,noreferrer'); }
       }
       return;
     }
@@ -168,7 +169,7 @@ export function CanvasTextButton({ data, onUpdate, onLock, onDelete, disabled, d
         return;
       }
       if (data.href) {
-        window.open(data.href, '_blank', 'noopener,noreferrer');
+        { const safe = sanitizeUrl(data.href); if (safe) window.open(safe, '_blank', 'noopener,noreferrer'); }
       }
     }
   };

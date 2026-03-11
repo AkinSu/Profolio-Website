@@ -3,6 +3,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { XIcon, MoveIcon, LinkIcon, MaximizeIcon, Link2OffIcon } from 'lucide-react';
 import { CanvasImageButtonData } from '../hooks/useCanvasButtons';
+import { sanitizeUrl } from '@/lib/sanitizeUrl';
 
 interface LinkableElement {
   id: string;
@@ -122,7 +123,7 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
     if (data.linkedElementId) {
       onPanToElement?.(data.linkedElementId);
     } else if (data.href) {
-      window.open(data.href, '_blank', 'noopener,noreferrer');
+      const safe = sanitizeUrl(data.href); if (safe) window.open(safe, '_blank', 'noopener,noreferrer');
     }
   }, [data.linkedElementId, data.href, onPanToElement]);
 

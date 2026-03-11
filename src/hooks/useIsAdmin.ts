@@ -1,24 +1,22 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
-export function useIsAdmin(): { isAdmin: boolean; isAdminResolved: boolean } {
+interface UseIsAdminReturn {
+  isAdmin: boolean;
+  isAdminResolved: boolean;
+  showLogin: boolean;
+  setShowLogin: (show: boolean) => void;
+  login: (username: string, password: string) => Promise<boolean>;
+  logout: () => void;
+}
+
+export function useIsAdmin(): UseIsAdminReturn {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isAdminResolved, setIsAdminResolved] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
 
   useEffect(() => {
-    // Check URL for ?admin=SECRET and set cookie
-    const params = new URLSearchParams(window.location.search);
-    const adminParam = params.get('admin');
-    if (adminParam) {
-      document.cookie = `admin_token=${adminParam}; path=/; SameSite=Strict`;
-      // Remove the query param from URL without reload
-      const url = new URL(window.location.href);
-      url.searchParams.delete('admin');
-      window.history.replaceState({}, '', url.toString());
-    }
-
-    // Verify the cookie against the server
     async function verify() {
       try {
         const res = await fetch('/api/admin/verify');
@@ -33,5 +31,28 @@ export function useIsAdmin(): { isAdmin: boolean; isAdminResolved: boolean } {
     verify();
   }, []);
 
-  return { isAdmin, isAdminResolved };
+  const login = useCallback(async (username: string, password: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      if (res.ok) {
+        setIsAdmin(true);
+        setShowLogin(false);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const logout = useCallback(async () => {
+    await fetch('/api/admin/logout', { method: 'POST' });
+    setIsAdmin(false);
+  }, []);
+
+  return { isAdmin, isAdminResolved, showLogin, setShowLogin, login, logout };
 }

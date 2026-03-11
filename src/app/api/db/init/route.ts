@@ -1,7 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { requireAdmin } from '@/lib/adminAuth';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const authError = requireAdmin(req);
+  if (authError) return authError;
+
   try {
     const sql = getDb();
     await sql`
@@ -15,10 +19,9 @@ export async function GET() {
       )
     `;
     return NextResponse.json({ success: true, message: 'canvas_elements table created' });
-  } catch (error) {
-    console.error('DB init error:', error);
+  } catch {
     return NextResponse.json(
-      { success: false, error: String(error) },
+      { success: false, error: 'Database initialization failed' },
       { status: 500 }
     );
   }

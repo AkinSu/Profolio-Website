@@ -14,7 +14,7 @@ export async function GET() {
     return NextResponse.json({ elements: rows });
   } catch (error) {
     console.error('GET /api/canvas error:', error);
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch elements' }, { status: 500 });
   }
 }
 
@@ -31,6 +31,17 @@ export async function POST(req: NextRequest) {
   }
 
   const { id, type, data, z_index = 0 } = parsed;
+
+  // Validate element type
+  const VALID_TYPES = ['sticky_note', 'text', 'image', 'drawing', 'text_button', 'image_button'];
+  if (type && !VALID_TYPES.includes(type)) {
+    return NextResponse.json({ error: 'Invalid element type' }, { status: 400 });
+  }
+
+  // Validate id format (UUID)
+  if (id && !/^[0-9a-f-]{36}$/i.test(id)) {
+    return NextResponse.json({ error: 'Invalid element id' }, { status: 400 });
+  }
 
   // Drawings: allow unauthenticated, but enforce 100KB size limit
   if (type === 'drawing') {
@@ -56,7 +67,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ element: rows[0] });
   } catch (error) {
     console.error('POST /api/canvas error:', error);
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to create element' }, { status: 500 });
   }
 }
 
@@ -89,7 +100,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ element: rows[0] });
   } catch (error) {
     console.error('PUT /api/canvas error:', error);
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to update element' }, { status: 500 });
   }
 }
 
@@ -107,6 +118,6 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('DELETE /api/canvas error:', error);
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to delete element' }, { status: 500 });
   }
 }

@@ -18,6 +18,7 @@ import { PencilCanvas, PencilStroke, CANVAS_Y_OFFSET } from "@/components/Pencil
 import { DrawingElement, DrawingElementData } from "@/components/DrawingElement";
 import { useCanvasElements, CanvasElement } from "@/hooks/useCanvasElements";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { AdminLogin } from "@/components/AdminLogin";
 import { uploadFiles } from "@/lib/uploadthing";
 import { compressStroke } from "@/lib/strokeCompression";
 
@@ -25,7 +26,7 @@ const NOTE_COLORS = ['#FFF176', '#F48FB1', '#90CAF9', '#A5D6A7', '#FFCC80', '#CE
 function randomNoteColor() { return NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)]; }
 
 export default function HomeContent() {
-  const { isAdmin, isAdminResolved } = useIsAdmin();
+  const { isAdmin, isAdminResolved, showLogin, setShowLogin, login } = useIsAdmin();
   const [overlayDone, setOverlayDone] = useState(false);
   const [mode, setMode] = useState<CanvasMode>('pan');
   const [devMenuOpen, setDevMenuOpen] = useState(false);
@@ -33,6 +34,18 @@ export default function HomeContent() {
   const pencilActiveRef = useRef(false);
   const [isUploading, setIsUploading] = useState(false);
   const [drawMode, setDrawMode] = useState(false);
+
+  // ─── Admin login shortcut (Ctrl/Cmd + Shift + L) ───
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'L') {
+        e.preventDefault();
+        if (!isAdmin) setShowLogin(true);
+      }
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [isAdmin, setShowLogin]);
 
   // ─── Single source of truth ───
   const {
@@ -444,6 +457,13 @@ export default function HomeContent() {
 
   return (
     <>
+      {showLogin && !isAdmin && (
+        <AdminLogin
+          onLogin={login}
+          onClose={() => setShowLogin(false)}
+        />
+      )}
+
       <IntroAnimation onComplete={() => setOverlayDone(true)} />
 
       {/* Loading indicator */}
