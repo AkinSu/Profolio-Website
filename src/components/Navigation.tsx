@@ -143,7 +143,7 @@ export function Navigation({ onCursorChange, disableCursors, show = true }: Navi
         styleEl.id = "custom-cursor-style";
         document.head.appendChild(styleEl);
       }
-      styleEl.textContent = `* { cursor: url(/pencil-cursor.png) 16 16, auto !important; }`;
+      styleEl.textContent = `* { cursor: url(/pencil-cursor.svg) 2 29, auto !important; }`;
       onCursorChangeRef.current?.("pencil");
     } else if (cursorMode === "hand") {
       if (!styleEl) {

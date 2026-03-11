@@ -561,7 +561,7 @@ export function StickyNote({
                   Empty note
                 </p>
             }
-              {!readOnly && <button
+              {!readOnly && devMode && <button
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete(note.id);
