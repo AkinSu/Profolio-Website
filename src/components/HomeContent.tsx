@@ -14,10 +14,12 @@ import { CanvasImageData } from "@/hooks/useCanvasImages";
 import { CanvasTextButton } from "@/components/CanvasTextButton";
 import { CanvasImageButton } from "@/components/CanvasImageButton";
 import { CanvasTextButtonData, CanvasImageButtonData } from "@/hooks/useCanvasButtons";
-import { PencilCanvas, PencilStroke } from "@/components/PencilCanvas";
+import { PencilCanvas, PencilStroke, CANVAS_Y_OFFSET } from "@/components/PencilCanvas";
+import { DrawingElement, DrawingElementData } from "@/components/DrawingElement";
 import { useCanvasElements, CanvasElement } from "@/hooks/useCanvasElements";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { uploadFiles } from "@/lib/uploadthing";
+import { compressStroke } from "@/lib/strokeCompression";
 
 const NOTE_COLORS = ['#FFF176', '#F48FB1', '#90CAF9', '#A5D6A7', '#FFCC80', '#CE93D8'];
 function randomNoteColor() { return NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)]; }
@@ -31,17 +33,25 @@ export default function HomeContent() {
   const pencilActiveRef = useRef(false);
   const [isUploading, setIsUploading] = useState(false);
   const [drawMode, setDrawMode] = useState(false);
-  const [pencilStrokes, setPencilStrokes] = useState<PencilStroke[]>([]);
-
-  const handleStrokeComplete = useCallback((stroke: PencilStroke) => {
-    setPencilStrokes((prev) => [...prev, stroke]);
-  }, []);
 
   // ─── Single source of truth ───
   const {
     elements, isLoading,
     addElement, persistElement, updateElement, removeElement,
   } = useCanvasElements(isAdmin);
+
+  const handleStrokeComplete = useCallback((stroke: PencilStroke) => {
+    const drawingData = compressStroke(stroke.points, CANVAS_Y_OFFSET);
+    if (!drawingData) return;
+
+    const id = crypto.randomUUID();
+    addElement({
+      id,
+      type: 'drawing',
+      z_index: 3,
+      data: drawingData as unknown as Record<string, unknown>,
+    }, true);
+  }, [addElement]);
 
   // Keep a ref for reading current elements in callbacks
   const elementsRef = useRef(elements);
@@ -80,6 +90,13 @@ export default function HomeContent() {
     elements
       .filter((e) => e.type === 'image_button')
       .map((e) => ({ ...e.data, id: e.id } as CanvasImageButtonData)),
+    [elements]
+  );
+
+  const drawings = useMemo<DrawingElementData[]>(() =>
+    elements
+      .filter((e) => e.type === 'drawing')
+      .map((e) => ({ ...e.data, id: e.id } as unknown as DrawingElementData)),
     [elements]
   );
 
@@ -211,6 +228,10 @@ export default function HomeContent() {
     updateElement(id, updates as Record<string, unknown>);
   }, [updateElement]);
 
+  const handleUpdateDrawing = useCallback((id: string, updates: Partial<DrawingElementData>) => {
+    updateElement(id, updates as Record<string, unknown>);
+  }, [updateElement]);
+
   // ─── Lock handlers (isEditing → false, then persist) ───
 
   const handleLockNote = useCallback((id: string) => {
@@ -250,6 +271,16 @@ export default function HomeContent() {
   const handleDeleteImage = useCallback((id: string) => { removeElement(id); }, [removeElement]);
   const handleDeleteTextButton = useCallback((id: string) => { removeElement(id); }, [removeElement]);
   const handleDeleteImageButton = useCallback((id: string) => { removeElement(id); }, [removeElement]);
+  const handleDeleteDrawing = useCallback((id: string) => { removeElement(id); }, [removeElement]);
+
+  const handleClearDrawings = useCallback(() => {
+    const drawingIds = elementsRef.current
+      .filter((e) => e.type === 'drawing')
+      .map((e) => e.id);
+    for (const id of drawingIds) {
+      removeElement(id);
+    }
+  }, [removeElement]);
 
   // ─── Canvas panning ───
 
@@ -447,7 +478,7 @@ export default function HomeContent() {
           disableCursors={disableCursors}
         />
         {isAdmin && (
-          <DevButton mode={mode} onModeChange={setMode} onOpenChange={setDevMenuOpen} onImageUpload={handleImageUpload} onImageButtonUpload={handleImageButtonUpload} drawMode={drawMode} onDrawModeChange={setDrawMode} />
+          <DevButton mode={mode} onModeChange={setMode} onOpenChange={setDevMenuOpen} onImageUpload={handleImageUpload} onImageButtonUpload={handleImageButtonUpload} drawMode={drawMode} onDrawModeChange={setDrawMode} onClearDrawings={handleClearDrawings} />
         )}
 
         {/* Layer 1: Blue ruled lines */}
@@ -504,14 +535,25 @@ export default function HomeContent() {
             }}
           />
 
-          {/* Pencil drawings */}
+          {/* Persisted drawings */}
+          {drawings.map((d) => (
+            <DrawingElement
+              key={d.id}
+              data={d}
+              onUpdate={handleUpdateDrawing}
+              onDelete={handleDeleteDrawing}
+              disabled={!!activeCursor || drawMode}
+              readOnly={!isAdmin}
+            />
+          ))}
+
+          {/* Live pencil input */}
           <PencilCanvas
             offsetX={offsetX}
             offsetY={offsetY}
             isActive={activeCursor === 'pencil' || drawMode}
             isAdmin={isAdmin}
             devDrawMode={drawMode}
-            strokes={pencilStrokes}
             onStrokeComplete={handleStrokeComplete}
           />
 

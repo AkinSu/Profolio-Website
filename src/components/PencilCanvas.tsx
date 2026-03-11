@@ -23,7 +23,6 @@ interface PencilCanvasProps {
   isActive: boolean;
   isAdmin: boolean;
   devDrawMode?: boolean; // dev toggle — draw anywhere
-  strokes?: PencilStroke[];
   onStrokeComplete?: (stroke: PencilStroke) => void;
 }
 
@@ -31,7 +30,7 @@ interface PencilCanvasProps {
 
 const CANVAS_W = 8000;
 const CANVAS_H = 6000; // Covers full pannable Y range (-2000 to 4000)
-const CANVAS_Y_OFFSET = -2000; // Canvas starts 2000px above world origin
+export const CANVAS_Y_OFFSET = -2000; // Canvas starts 2000px above world origin
 const TIP_SIZE = 14;
 const STAMP_SPACING = 2;
 
@@ -115,7 +114,6 @@ export function PencilCanvas({
   isActive,
   isAdmin,
   devDrawMode,
-  strokes,
   onStrokeComplete,
 }: PencilCanvasProps) {
   const committedRef = useRef<HTMLCanvasElement | null>(null);
@@ -129,7 +127,6 @@ export function PencilCanvas({
   const lastTime = useRef(0);
   const rafId = useRef<number | null>(null);
   const needsRender = useRef(false);
-  const renderedStrokesCount = useRef(0);
 
   // ─── Initialize brush tip ───
   useEffect(() => {
@@ -186,56 +183,6 @@ export function PencilCanvas({
     },
     []
   );
-
-  // ─── Render a full stroke onto a context (for replaying saved strokes) ───
-  const renderStroke = useCallback(
-    (ctx: CanvasRenderingContext2D, stroke: PencilStroke) => {
-      if (stroke.points.length < 2) return;
-      for (let i = 1; i < stroke.points.length; i++) {
-        const stamps = getStampPoints(stroke.points[i - 1], stroke.points[i]);
-        for (const pt of stamps) {
-          stamp(ctx, pt);
-        }
-      }
-    },
-    [stamp]
-  );
-
-  // ─── Render saved strokes from props onto committed canvas ───
-  useEffect(() => {
-    if (!strokes || strokes.length === 0) return;
-    const committed = committedRef.current;
-    if (!committed) return;
-    const ctx = committed.getContext("2d");
-    if (!ctx) return;
-
-    const startIdx = renderedStrokesCount.current;
-    if (startIdx >= strokes.length) return;
-
-    const tempStroke = document.createElement("canvas");
-    tempStroke.width = CANVAS_W;
-    tempStroke.height = CANVAS_H;
-    const tempCtx = tempStroke.getContext("2d")!;
-
-    for (let i = startIdx; i < strokes.length; i++) {
-      tempCtx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-      renderStroke(tempCtx, strokes[i]);
-      ctx.globalAlpha = 1.0;
-      ctx.drawImage(tempStroke, 0, 0);
-      ctx.globalAlpha = 1.0;
-    }
-
-    renderedStrokesCount.current = strokes.length;
-
-    const display = displayRef.current;
-    if (display) {
-      const dCtx = display.getContext("2d");
-      if (dCtx) {
-        dCtx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-        dCtx.drawImage(committed, 0, 0);
-      }
-    }
-  }, [strokes, renderStroke]);
 
   // ─── Render loop ───
   useEffect(() => {
@@ -413,9 +360,7 @@ export function PencilCanvas({
     height: CANVAS_H,
   };
 
-  const hasStrokes = strokes && strokes.length > 0;
-  const shouldRender = isActive || isAdmin || hasStrokes;
-  if (!shouldRender) return null;
+  if (!isActive && !isAdmin) return null;
 
   return (
     <div

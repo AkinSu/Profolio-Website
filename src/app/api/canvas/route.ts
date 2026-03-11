@@ -20,10 +20,30 @@ export async function GET() {
 
 // POST /api/canvas — create a new element
 export async function POST(req: NextRequest) {
-  const authError = requireAdmin(req);
-  if (authError) return authError;
+  // Read body as text first for size check
+  const bodyText = await req.text();
+
+  let parsed;
   try {
-    const { id, type, data, z_index = 0 } = await req.json();
+    parsed = JSON.parse(bodyText);
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  const { id, type, data, z_index = 0 } = parsed;
+
+  // Drawings: allow unauthenticated, but enforce 100KB size limit
+  if (type === 'drawing') {
+    if (bodyText.length > 100_000) {
+      return NextResponse.json({ error: 'Drawing payload too large (max 100KB)' }, { status: 413 });
+    }
+  } else {
+    // All other types require admin auth
+    const authError = requireAdmin(req);
+    if (authError) return authError;
+  }
+
+  try {
     if (!id || !type || !data) {
       return NextResponse.json({ error: 'Missing required fields: id, type, data' }, { status: 400 });
     }

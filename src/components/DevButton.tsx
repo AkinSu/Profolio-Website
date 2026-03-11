@@ -13,9 +13,10 @@ interface DevButtonProps {
   onImageButtonUpload?: (file: File) => void;
   drawMode?: boolean;
   onDrawModeChange?: (enabled: boolean) => void;
+  onClearDrawings?: () => void;
 }
 
-export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onImageButtonUpload, drawMode, onDrawModeChange }: DevButtonProps) {
+export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onImageButtonUpload, drawMode, onDrawModeChange, onClearDrawings }: DevButtonProps) {
   const [open, setOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imgBtnInputRef = useRef<HTMLInputElement>(null);
@@ -138,9 +139,9 @@ export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onI
               />
             </div>
 
-            {/* Draw toggle */}
+            {/* Draw toggle + clear */}
             <div style={{ padding: "8px 12px 8px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                 <p style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "monospace", letterSpacing: "0.08em", margin: 0 }}>DRAW</p>
                 <button
                   onClick={() => onDrawModeChange?.(!drawMode)}
@@ -170,6 +171,31 @@ export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onI
                   />
                 </button>
               </div>
+              <button
+                onClick={() => onClearDrawings?.()}
+                style={{
+                  width: "100%",
+                  padding: "5px 0",
+                  background: "transparent",
+                  color: "rgba(239,68,68,0.6)",
+                  border: "1px solid rgba(239,68,68,0.2)",
+                  borderRadius: 6,
+                  fontSize: 10,
+                  fontFamily: "monospace",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(239,68,68,0.1)";
+                  e.currentTarget.style.color = "rgba(239,68,68,0.9)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.color = "rgba(239,68,68,0.6)";
+                }}
+              >
+                clear all drawings
+              </button>
             </div>
 
             {/* Buttons */}
