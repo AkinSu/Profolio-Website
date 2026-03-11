@@ -6,6 +6,7 @@ export interface CanvasTextButtonData {
   y: number;
   text: string;
   href: string;
+  linkedElementId?: string;
   color: string;
   fontSize: number;
   bold: boolean;
@@ -21,6 +22,7 @@ export interface CanvasImageButtonData {
   height: number;
   src: string;
   href: string;
+  linkedElementId?: string;
   naturalWidth: number;
   naturalHeight: number;
   isEditing: boolean;

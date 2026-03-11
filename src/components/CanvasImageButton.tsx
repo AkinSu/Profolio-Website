@@ -1,8 +1,14 @@
 "use client";
 
 import React, { useCallback, useRef, useState } from 'react';
-import { XIcon, MoveIcon, LinkIcon, MaximizeIcon } from 'lucide-react';
+import { XIcon, MoveIcon, LinkIcon, MaximizeIcon, Link2OffIcon } from 'lucide-react';
 import { CanvasImageButtonData } from '../hooks/useCanvasButtons';
+
+interface LinkableElement {
+  id: string;
+  type: string;
+  label: string;
+}
 
 interface CanvasImageButtonProps {
   data: CanvasImageButtonData;
@@ -13,13 +19,19 @@ interface CanvasImageButtonProps {
   devMode?: boolean;
   cursorMode?: string | null;
   readOnly?: boolean;
+  linkableElements?: LinkableElement[];
+  onPanToElement?: (elementId: string) => void;
 }
 
-export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, devMode, cursorMode, readOnly }: CanvasImageButtonProps) {
+export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, devMode, cursorMode, readOnly, linkableElements, onPanToElement }: CanvasImageButtonProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [selected, setSelected] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Derive link mode from data
+  const linkMode = data.linkedElementId ? 'element' : 'url';
+  const hasLink = !!(data.href || data.linkedElementId);
 
   // Click-outside to deselect / lock
   React.useEffect(() => {
@@ -103,22 +115,30 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
     [data.id, data.width, data.naturalWidth, data.naturalHeight, onUpdate]
   );
 
+  const navigateOrPan = useCallback(() => {
+    if (data.linkedElementId) {
+      onPanToElement?.(data.linkedElementId);
+    } else if (data.href) {
+      window.open(data.href, '_blank', 'noopener,noreferrer');
+    }
+  }, [data.linkedElementId, data.href, onPanToElement]);
+
   const handleImageClick = () => {
     if (data.isEditing) return;
-    // ReadOnly: just navigate
+    // ReadOnly: navigate or pan
     if (readOnly) {
-      if (data.href) window.open(data.href, '_blank', 'noopener,noreferrer');
+      navigateOrPan();
       return;
     }
-    // Hand cursor: navigate directly, no select step
-    if (cursorMode === 'hand' && !devMode && data.href) {
-      window.open(data.href, '_blank', 'noopener,noreferrer');
+    // Hand cursor: navigate/pan directly, no select step
+    if (cursorMode === 'hand' && !devMode && hasLink) {
+      navigateOrPan();
       return;
     }
     if (!selected) {
       setSelected(true);
-    } else if (data.href && !devMode) {
-      window.open(data.href, '_blank', 'noopener,noreferrer');
+    } else if (hasLink && !devMode) {
+      navigateOrPan();
     }
   };
 
@@ -135,6 +155,18 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
     cursor: 'pointer',
     padding: 0,
     transition: 'background 0.1s',
+  });
+
+  const segBtn = (active: boolean): React.CSSProperties => ({
+    flex: 1,
+    padding: '3px 0',
+    background: active ? 'rgba(0,0,0,0.12)' : 'transparent',
+    color: active ? '#44403c' : 'rgba(0,0,0,0.35)',
+    border: `1px solid ${active ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.08)'}`,
+    borderRadius: 4,
+    fontSize: 10,
+    fontFamily: 'monospace',
+    cursor: 'pointer',
   });
 
   return (
@@ -185,7 +217,7 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
         </div>
       )}
 
-      {/* Editing: show href input */}
+      {/* Editing: link input panel */}
       {data.isEditing && (
         <div
           style={{
@@ -194,37 +226,104 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
             left: '50%',
             transform: 'translateX(-50%)',
             marginTop: 6,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
             background: '#f5f0e8',
             border: '1px solid rgba(0,0,0,0.12)',
             borderRadius: 6,
-            padding: '4px 8px',
+            padding: '6px 8px',
             boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
             whiteSpace: 'nowrap',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+            minWidth: 200,
           }}
         >
-          <LinkIcon style={{ width: 14, height: 14, color: 'rgba(0,0,0,0.4)', flexShrink: 0 }} />
-          <input
-            type="text"
-            value={data.href}
-            onChange={(e) => onUpdate(data.id, { href: e.target.value })}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onLock(data.id); } }}
-            placeholder="https://..."
-            autoFocus
-            style={{
-              fontFamily: 'monospace',
-              fontSize: 12,
-              color: '#44403c',
-              background: 'transparent',
-              border: 'none',
-              borderBottom: '1px dashed rgba(0,0,0,0.2)',
-              outline: 'none',
-              minWidth: 160,
-              padding: '2px 2px',
-            }}
-          />
+          {/* Link type toggle */}
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button
+              onClick={() => onUpdate(data.id, { linkedElementId: '', href: data.href || '' })}
+              style={segBtn(linkMode === 'url')}
+            >
+              URL
+            </button>
+            <button
+              onClick={() => onUpdate(data.id, { href: '', linkedElementId: data.linkedElementId || '' })}
+              style={segBtn(linkMode === 'element')}
+            >
+              Element
+            </button>
+          </div>
+
+          {linkMode === 'url' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <LinkIcon style={{ width: 14, height: 14, color: 'rgba(0,0,0,0.4)', flexShrink: 0 }} />
+              <input
+                type="text"
+                value={data.href}
+                onChange={(e) => onUpdate(data.id, { href: e.target.value, linkedElementId: '' })}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onLock(data.id); } }}
+                placeholder="https://..."
+                autoFocus
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  color: '#44403c',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: '1px dashed rgba(0,0,0,0.2)',
+                  outline: 'none',
+                  minWidth: 160,
+                  padding: '2px 2px',
+                }}
+              />
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <select
+                value={data.linkedElementId || ''}
+                onChange={(e) => onUpdate(data.id, { linkedElementId: e.target.value, href: '' })}
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                  color: '#44403c',
+                  background: '#f5f0e8',
+                  border: '1px solid rgba(0,0,0,0.15)',
+                  borderRadius: 4,
+                  outline: 'none',
+                  padding: '3px 4px',
+                  minWidth: 160,
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="">Select element...</option>
+                {linkableElements
+                  ?.filter(e => e.id !== data.id)
+                  .map(e => (
+                    <option key={e.id} value={e.id}>
+                      {e.type.replace('_', ' ')} — {e.label}
+                    </option>
+                  ))
+                }
+              </select>
+              {data.linkedElementId && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onUpdate(data.id, { linkedElementId: '' }); }}
+                  title="Unlink"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#ef4444',
+                    cursor: 'pointer',
+                    padding: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Link2OffIcon style={{ width: 14, height: 14 }} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -250,7 +349,7 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
           width: '100%',
           height: '100%',
           objectFit: 'contain',
-          cursor: data.href ? 'pointer' : 'default',
+          cursor: hasLink ? 'pointer' : 'default',
           userSelect: 'none',
           display: 'block',
           transition: 'transform 0.15s ease',

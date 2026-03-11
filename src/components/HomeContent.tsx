@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
-import { motion, useMotionValue } from "framer-motion";
+import { motion, useMotionValue, animate } from "framer-motion";
 import { Navigation } from "@/components/Navigation";
 import { IntroAnimation } from "@/components/IntroAnimation";
 import { DevButton, CanvasMode } from "@/components/DevButton";
@@ -282,6 +282,25 @@ export default function HomeContent() {
     }
   }, [removeElement]);
 
+  // ─── Linkable elements list for button linking ───
+
+  const linkableElements = useMemo(() =>
+    elements
+      .filter(e => ['sticky_note', 'text', 'image', 'text_button', 'image_button'].includes(e.type))
+      .map(e => {
+        let label = e.type.replace('_', ' ');
+        const text = e.data.text as string | undefined;
+        const topText = e.data.topText as string | undefined;
+        if (text) label = text.length > 25 ? text.slice(0, 25) + '...' : text;
+        else if (topText) label = topText.length > 25 ? topText.slice(0, 25) + '...' : topText;
+        else if (e.type === 'image') label = 'Image';
+        else if (e.type === 'image_button') label = 'Image Button';
+        else if (e.type === 'sticky_note') label = 'Sticky Note';
+        return { id: e.id, type: e.type, label };
+      }),
+    [elements]
+  );
+
   // ─── Canvas panning ───
 
   const offsetX = useMotionValue(0);
@@ -358,6 +377,40 @@ export default function HomeContent() {
     setPanLimitPos(null);
     if (outerRef.current) outerRef.current.style.cursor = getCursor();
   };
+
+  // ─── Pan to element (for internal canvas linking) ───
+
+  const panToElement = useCallback((elementId: string) => {
+    const el = elementsRef.current.find((e) => e.id === elementId);
+    if (!el) return;
+
+    const x = Number(el.data.x) || 0;
+    const y = Number(el.data.y) || 0;
+    const w = Number(el.data.width) || 200;
+    const h = Number(el.data.height) || 100;
+
+    const targetX = Math.min(0, -(x + w / 2) + window.innerWidth / 2);
+    const targetY = Math.min(2000, Math.max(
+      window.innerHeight - 3000,
+      -(y + h / 2) + window.innerHeight / 2
+    ));
+
+    animate(offsetX.get(), targetX, {
+      duration: 0.6,
+      ease: "easeInOut",
+      onUpdate: (v) => offsetX.set(v),
+    });
+    animate(offsetY.get(), targetY, {
+      duration: 0.6,
+      ease: "easeInOut",
+      onUpdate: (v) => {
+        offsetY.set(v);
+        if (rulesRef.current) {
+          rulesRef.current.style.backgroundPosition = `0 ${48 + v}px`;
+        }
+      },
+    });
+  }, [offsetX, offsetY]);
 
   const handleClick = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("button, a, input, textarea")) return;
@@ -596,6 +649,8 @@ export default function HomeContent() {
                 disabled={activeCursor === 'pencil'}
                 devMode={devMenuOpen}
                 readOnly={!isAdmin}
+                linkableElements={linkableElements}
+                onPanToElement={panToElement}
               />
             ))}
           </div>
@@ -612,6 +667,8 @@ export default function HomeContent() {
               devMode={devMenuOpen}
               cursorMode={activeCursor}
               readOnly={!isAdmin}
+              linkableElements={linkableElements}
+              onPanToElement={panToElement}
             />
           ))}
 

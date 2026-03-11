@@ -75,15 +75,45 @@ export function useCanvasElements(isAdmin: boolean) {
     return () => { cancelled = true; };
   }, [fetchElements]);
 
-  // Polling for visitors only — replaces state every 2s
+  // Polling — visitors replace state, admin merges new/updated elements
   useEffect(() => {
-    if (isAdmin) return;
-
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
     async function poll() {
       const els = await fetchElements();
-      if (els) setElements(els);
+      if (!els) return;
+
+      if (!isAdmin) {
+        // Visitors: full state replacement
+        setElements(els);
+      } else {
+        // Admin: merge — add new elements, update existing ones that aren't being edited
+        // and don't have pending debounced updates
+        setElements((prev) => {
+          const prevMap = new Map(prev.map((e) => [e.id, e]));
+          const remoteIds = new Set(els.map((e) => e.id));
+
+          // Start with remote elements, preserving local state for actively edited ones
+          const merged: CanvasElement[] = els.map((remote) => {
+            const local = prevMap.get(remote.id);
+            if (!local) return remote; // new from remote
+            // Keep local version if being edited or has pending update
+            if (local.data.isEditing || updateTimers.current.has(remote.id) || unpersistedIds.current.has(remote.id)) {
+              return local;
+            }
+            return remote;
+          });
+
+          // Keep unpersisted local elements (not yet POSTed)
+          for (const local of prev) {
+            if (unpersistedIds.current.has(local.id) && !remoteIds.has(local.id)) {
+              merged.push(local);
+            }
+          }
+
+          return merged;
+        });
+      }
     }
 
     function start() {

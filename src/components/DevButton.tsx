@@ -18,6 +18,7 @@ interface DevButtonProps {
 
 export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onImageButtonUpload, drawMode, onDrawModeChange, onClearDrawings }: DevButtonProps) {
   const [open, setOpen] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imgBtnInputRef = useRef<HTMLInputElement>(null);
 
@@ -27,7 +28,7 @@ export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onI
 
   const toggleOpen = () => {
     setOpen((o) => !o);
-    if (open) onModeChange('pan');
+    if (open) { onModeChange('pan'); setConfirmClear(false); }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -171,31 +172,68 @@ export function DevButton({ mode, onModeChange, onOpenChange, onImageUpload, onI
                   />
                 </button>
               </div>
-              <button
-                onClick={() => onClearDrawings?.()}
-                style={{
-                  width: "100%",
-                  padding: "5px 0",
-                  background: "transparent",
-                  color: "rgba(239,68,68,0.6)",
-                  border: "1px solid rgba(239,68,68,0.2)",
-                  borderRadius: 6,
-                  fontSize: 10,
-                  fontFamily: "monospace",
-                  cursor: "pointer",
-                  transition: "all 0.15s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(239,68,68,0.1)";
-                  e.currentTarget.style.color = "rgba(239,68,68,0.9)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.color = "rgba(239,68,68,0.6)";
-                }}
-              >
-                clear all drawings
-              </button>
+              {!confirmClear ? (
+                <button
+                  onClick={() => setConfirmClear(true)}
+                  style={{
+                    width: "100%",
+                    padding: "5px 0",
+                    background: "transparent",
+                    color: "rgba(239,68,68,0.6)",
+                    border: "1px solid rgba(239,68,68,0.2)",
+                    borderRadius: 6,
+                    fontSize: 10,
+                    fontFamily: "monospace",
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(239,68,68,0.1)";
+                    e.currentTarget.style.color = "rgba(239,68,68,0.9)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "rgba(239,68,68,0.6)";
+                  }}
+                >
+                  clear all drawings
+                </button>
+              ) : (
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button
+                    onClick={() => { onClearDrawings?.(); setConfirmClear(false); }}
+                    style={{
+                      flex: 1,
+                      padding: "5px 0",
+                      background: "rgba(239,68,68,0.2)",
+                      color: "rgba(239,68,68,0.9)",
+                      border: "1px solid rgba(239,68,68,0.4)",
+                      borderRadius: 6,
+                      fontSize: 10,
+                      fontFamily: "monospace",
+                      cursor: "pointer",
+                    }}
+                  >
+                    yes, clear
+                  </button>
+                  <button
+                    onClick={() => setConfirmClear(false)}
+                    style={{
+                      flex: 1,
+                      padding: "5px 0",
+                      background: "transparent",
+                      color: "rgba(255,255,255,0.5)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      borderRadius: 6,
+                      fontSize: 10,
+                      fontFamily: "monospace",
+                      cursor: "pointer",
+                    }}
+                  >
+                    cancel
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Buttons */}
