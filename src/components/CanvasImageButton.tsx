@@ -145,12 +145,12 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
     }
   };
 
-  const tbBtn = (): React.CSSProperties => ({
+  const tbBtn = (active?: boolean): React.CSSProperties => ({
     width: 26,
     height: 26,
     borderRadius: 4,
     border: 'none',
-    background: 'transparent',
+    background: active ? 'rgba(0,0,0,0.15)' : 'transparent',
     color: '#44403c',
     display: 'flex',
     alignItems: 'center',
@@ -213,6 +213,10 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
           <div onPointerDown={onResizeDown} style={{ ...tbBtn(), cursor: 'nwse-resize' }} title="Resize (drag)">
             <MaximizeIcon style={{ width: 14, height: 14 }} />
           </div>
+          <div style={{ width: 1, height: 18, background: 'rgba(0,0,0,0.1)' }} />
+          <button onClick={(e) => { e.stopPropagation(); onUpdate(data.id, { isEditing: true }); }} style={tbBtn(data.isEditing)} title="Edit link">
+            <LinkIcon style={{ width: 14, height: 14 }} />
+          </button>
           <div style={{ width: 1, height: 18, background: 'rgba(0,0,0,0.1)' }} />
           <button onClick={(e) => { e.stopPropagation(); onDelete(data.id); }} style={{ ...tbBtn(), color: '#ef4444' }} title="Delete">
             <XIcon style={{ width: 14, height: 14 }} />
@@ -285,6 +289,8 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
               <select
                 value={data.linkedElementId || ''}
                 onChange={(e) => onUpdate(data.id, { linkedElementId: e.target.value, href: '' })}
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
                 style={{
                   fontFamily: 'monospace',
                   fontSize: 11,
@@ -296,6 +302,7 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
                   padding: '3px 4px',
                   minWidth: 160,
                   cursor: 'pointer',
+                  userSelect: 'auto',
                 }}
               >
                 <option value="">Select element...</option>
