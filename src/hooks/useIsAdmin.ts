@@ -17,13 +17,35 @@ export function useIsAdmin(): UseIsAdminReturn {
   const [showLogin, setShowLogin] = useState(false);
 
   useEffect(() => {
+    // Clear any legacy non-httpOnly admin_token cookie from old auth system
+    document.cookie = 'admin_token=; path=/; max-age=0';
+
+    // Check URL params
+    const params = new URLSearchParams(window.location.search);
+    const wantsDev = params.has('admin');
+
+    // Clean URL params
+    if (wantsDev) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('admin');
+      window.history.replaceState({}, '', url.toString());
+    }
+
     async function verify() {
       try {
+        // Check existing session
         const res = await fetch('/api/admin/verify');
         const data = await res.json();
-        setIsAdmin(data.isAdmin === true);
+        const verified = data.isAdmin === true;
+        setIsAdmin(verified);
+
+        // If ?dev was in URL and not already authenticated, show login
+        if (wantsDev && !verified) {
+          setShowLogin(true);
+        }
       } catch {
         setIsAdmin(false);
+        if (wantsDev) setShowLogin(true);
       } finally {
         setIsAdminResolved(true);
       }
