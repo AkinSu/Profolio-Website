@@ -10,9 +10,13 @@ export function Providers({ children }: { children: ReactNode }) {
     setMounted(true);
   }, []);
 
+  if (!mounted) {
+    return null;
+  }
+
   return (
     <ChakraProvider value={defaultSystem}>
-      {mounted ? children : null}
+      {children}
     </ChakraProvider>
   );
 }
