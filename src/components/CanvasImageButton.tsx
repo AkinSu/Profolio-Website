@@ -37,7 +37,10 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
   React.useEffect(() => {
     if (!selected && !data.isEditing) return;
     function handleDown(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      // Native select dropdowns render outside the DOM tree — ignore clicks on select/option
+      if (target.tagName === 'SELECT' || target.tagName === 'OPTION') return;
+      if (wrapperRef.current && !wrapperRef.current.contains(target)) {
         if (data.isEditing) onLock(data.id);
         setSelected(false);
       }
