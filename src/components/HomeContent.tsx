@@ -335,8 +335,8 @@ export default function HomeContent() {
     return () => window.removeEventListener("mouseup", stop);
   }, [getCursor]);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest("button, a, input, textarea")) return;
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest("button, a, input, textarea, select")) return;
     if (mode === 'place' || mode === 'text' || mode === 'textbtn' || mode === 'imgbtn') return;
     if (pencilActiveRef.current || drawMode) return;
     e.preventDefault();
@@ -346,7 +346,7 @@ export default function HomeContent() {
     if (outerRef.current) outerRef.current.style.cursor = "grabbing";
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handlePointerMove = (e: React.PointerEvent) => {
     if (!isPanningRef.current) return;
     const dx = e.clientX - lastMouseRef.current.x;
     const dy = e.clientY - lastMouseRef.current.y;
@@ -372,7 +372,7 @@ export default function HomeContent() {
     }
   };
 
-  const handleMouseUp = () => {
+  const handlePointerUp = () => {
     isPanningRef.current = false;
     setPanLimitPos(null);
     if (outerRef.current) outerRef.current.style.cursor = getCursor();
@@ -496,13 +496,14 @@ export default function HomeContent() {
           position: "relative",
           overflow: "hidden",
           userSelect: "none",
+          touchAction: "none",
           cursor: getCursor(),
           backgroundColor: "#f5f5f0",
         }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
         onClick={handleClick}
       >
 
