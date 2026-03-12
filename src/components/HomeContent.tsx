@@ -336,6 +336,7 @@ export default function HomeContent() {
   const clampX = useCallback((ox: number, z: number) => {
     const maxX = 0;
     const minX = window.innerWidth - CANVAS_RIGHT * z;
+    if (minX >= maxX) return 0; // canvas fits in viewport, pin to left
     return Math.max(minX, Math.min(maxX, ox));
   }, []);
 
@@ -650,7 +651,7 @@ export default function HomeContent() {
             style={{
               position: "absolute",
               top: -2000,
-              left: 140,
+              left: 240,
               width: 5,
               height: 5000,
               backgroundColor: "rgba(220,80,80,0.3)",
