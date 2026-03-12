@@ -10,9 +10,10 @@ interface CanvasImageProps {
   onDelete: (id: string) => void;
   disabled?: boolean;
   readOnly?: boolean;
+  zoom?: number;
 }
 
-export function CanvasImage({ data, onUpdate, onDelete, disabled, readOnly }: CanvasImageProps) {
+export function CanvasImage({ data, onUpdate, onDelete, disabled, readOnly, zoom = 1 }: CanvasImageProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [selected, setSelected] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -56,8 +57,8 @@ export function CanvasImage({ data, onUpdate, onDelete, disabled, readOnly }: Ca
       const onMove = (me: PointerEvent) => {
         if (!dragState.current) return;
         onUpdate(data.id, {
-          x: dragState.current.startX + (me.clientX - dragState.current.startMouseX),
-          y: dragState.current.startY + (me.clientY - dragState.current.startMouseY),
+          x: dragState.current.startX + (me.clientX - dragState.current.startMouseX) / zoom,
+          y: dragState.current.startY + (me.clientY - dragState.current.startMouseY) / zoom,
         });
       };
       const onUp = () => {
@@ -90,7 +91,7 @@ export function CanvasImage({ data, onUpdate, onDelete, disabled, readOnly }: Ca
       const onMove = (me: PointerEvent) => {
         if (!resizeState.current) return;
         const dx = me.clientX - resizeState.current.startMouseX;
-        const newW = Math.max(60, Math.min(1200, resizeState.current.startW + dx));
+        const newW = Math.max(60, Math.min(1200, resizeState.current.startW + dx / zoom));
         onUpdate(data.id, { width: newW, height: newW / aspect });
       };
       const onUp = () => {

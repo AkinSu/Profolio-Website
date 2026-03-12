@@ -25,6 +25,11 @@ import { compressStroke } from "@/lib/strokeCompression";
 const NOTE_COLORS = ['#FFF176', '#F48FB1', '#90CAF9', '#A5D6A7', '#FFCC80', '#CE93D8'];
 function randomNoteColor() { return NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)]; }
 
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 2.0;
+const ZOOM_STEP = 0.08;
+const CANVAS_RIGHT = 4000;
+
 export default function HomeContent() {
   const { isAdmin, isAdminResolved, showLogin, setShowLogin, login } = useIsAdmin();
   const [overlayDone, setOverlayDone] = useState(false);
@@ -34,6 +39,8 @@ export default function HomeContent() {
   const pencilActiveRef = useRef(false);
   const [isUploading, setIsUploading] = useState(false);
   const [drawMode, setDrawMode] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const zoomRef = useRef(1);
 
   // ─── Admin login shortcut (Ctrl/Cmd + Shift + L) ───
   useEffect(() => {
@@ -163,8 +170,8 @@ export default function HomeContent() {
       // Load the image to get natural dimensions
       const img = new Image();
       img.onload = () => {
-        const cx = -offsetX.get() + window.innerWidth / 2;
-        const cy = -offsetY.get() + window.innerHeight / 2;
+        const cx = (-offsetX.get() + window.innerWidth / 2) / zoomRef.current;
+        const cy = (-offsetY.get() + window.innerHeight / 2) / zoomRef.current;
         const displayWidth = 300;
         const displayHeight = (img.naturalHeight / img.naturalWidth) * displayWidth;
         const id = crypto.randomUUID();
@@ -195,8 +202,8 @@ export default function HomeContent() {
       if (!url) { console.error('No URL in upload response:', uploaded); setIsUploading(false); return; }
       const img = new Image();
       img.onload = () => {
-        const cx = -offsetX.get() + window.innerWidth / 2;
-        const cy = -offsetY.get() + window.innerHeight / 2;
+        const cx = (-offsetX.get() + window.innerWidth / 2) / zoomRef.current;
+        const cy = (-offsetY.get() + window.innerHeight / 2) / zoomRef.current;
         const displayWidth = 200;
         const displayHeight = (img.naturalHeight / img.naturalWidth) * displayWidth;
         const id = crypto.randomUUID();
@@ -314,7 +321,7 @@ export default function HomeContent() {
     [elements]
   );
 
-  // ─── Canvas panning ───
+  // ─── Canvas panning & zoom ───
 
   const offsetX = useMotionValue(0);
   const offsetY = useMotionValue(0);
@@ -325,6 +332,27 @@ export default function HomeContent() {
   const outerRef = useRef<HTMLDivElement>(null);
   const rulesRef = useRef<HTMLDivElement>(null);
   const [panLimitPos, setPanLimitPos] = useState<{ x: number; y: number } | null>(null);
+
+  const clampX = useCallback((ox: number, z: number) => {
+    const maxX = 0;
+    const minX = window.innerWidth - CANVAS_RIGHT * z;
+    return Math.max(minX, Math.min(maxX, ox));
+  }, []);
+
+  const clampY = useCallback((oy: number, z: number) => {
+    const maxY = 2000 * z;
+    const minY = window.innerHeight - 3000 * z;
+    return Math.max(minY, Math.min(maxY, oy));
+  }, []);
+
+  const updateRuledLines = useCallback((z: number, oy: number) => {
+    if (!rulesRef.current) return;
+    const spacing = 32 * z;
+    rulesRef.current.style.backgroundSize = `100% ${spacing}px`;
+    rulesRef.current.style.backgroundImage =
+      `repeating-linear-gradient(transparent, transparent ${spacing - 1}px, rgba(140,180,220,0.25) ${spacing - 1}px, rgba(140,180,220,0.25) ${spacing}px)`;
+    rulesRef.current.style.backgroundPosition = `0 ${48 * z + oy}px`;
+  }, []);
 
   const disableCursors = devMenuOpen || mode === 'place' || mode === 'text' || mode === 'textbtn' || mode === 'imgbtn';
 
@@ -348,6 +376,41 @@ export default function HomeContent() {
     return () => window.removeEventListener("pointerup", stop);
   }, [getCursor]);
 
+  // ─── Wheel: Ctrl+scroll = zoom, plain scroll = vertical pan ───
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) {
+        // Zoom toward cursor
+        const direction = e.deltaY > 0 ? -1 : 1;
+        const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoomRef.current + direction * ZOOM_STEP));
+        if (newZoom === zoomRef.current) return;
+
+        const worldX = (e.clientX - offsetX.get()) / zoomRef.current;
+        const worldY = (e.clientY - offsetY.get()) / zoomRef.current;
+
+        const newOX = clampX(e.clientX - worldX * newZoom, newZoom);
+        const newOY = clampY(e.clientY - worldY * newZoom, newZoom);
+
+        offsetX.set(newOX);
+        offsetY.set(newOY);
+        zoomRef.current = newZoom;
+        setZoom(newZoom);
+        updateRuledLines(newZoom, newOY);
+      } else {
+        // Plain scroll = vertical pan
+        const rawY = offsetY.get() - e.deltaY;
+        const clamped = clampY(rawY, zoomRef.current);
+        offsetY.set(clamped);
+        updateRuledLines(zoomRef.current, clamped);
+      }
+    };
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [offsetX, offsetY, clampX, clampY, updateRuledLines]);
+
   const handlePointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest("button, a, input, textarea, select")) return;
     if (mode === 'place' || mode === 'text' || mode === 'textbtn' || mode === 'imgbtn') return;
@@ -367,10 +430,11 @@ export default function HomeContent() {
 
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) didPanRef.current = true;
 
+    const z = zoomRef.current;
     const rawX = offsetX.get() + dx;
     const rawY = offsetY.get() + dy;
-    const clampedX = Math.min(0, rawX);
-    const clampedY = Math.min(2000, Math.max(window.innerHeight - 3000, rawY));
+    const clampedX = clampX(rawX, z);
+    const clampedY = clampY(rawY, z);
     offsetX.set(clampedX);
     offsetY.set(clampedY);
 
@@ -380,9 +444,7 @@ export default function HomeContent() {
       setPanLimitPos(null);
     }
 
-    if (rulesRef.current) {
-      rulesRef.current.style.backgroundPosition = `0 ${48 + offsetY.get()}px`;
-    }
+    updateRuledLines(z, clampedY);
   };
 
   const handlePointerUp = () => {
@@ -397,16 +459,14 @@ export default function HomeContent() {
     const el = elementsRef.current.find((e) => e.id === elementId);
     if (!el) return;
 
+    const z = zoomRef.current;
     const x = Number(el.data.x) || 0;
     const y = Number(el.data.y) || 0;
     const w = Number(el.data.width) || 200;
     const h = Number(el.data.height) || 100;
 
-    const targetX = Math.min(0, -(x + w / 2) + window.innerWidth / 2);
-    const targetY = Math.min(2000, Math.max(
-      window.innerHeight - 3000,
-      -(y + h / 2) + window.innerHeight / 2
-    ));
+    const targetX = clampX(-(x + w / 2) * z + window.innerWidth / 2, z);
+    const targetY = clampY(-(y + h / 2) * z + window.innerHeight / 2, z);
 
     animate(offsetX.get(), targetX, {
       duration: 0.6,
@@ -418,29 +478,28 @@ export default function HomeContent() {
       ease: "easeInOut",
       onUpdate: (v) => {
         offsetY.set(v);
-        if (rulesRef.current) {
-          rulesRef.current.style.backgroundPosition = `0 ${48 + v}px`;
-        }
+        updateRuledLines(z, v);
       },
     });
-  }, [offsetX, offsetY]);
+  }, [offsetX, offsetY, clampX, clampY, updateRuledLines]);
 
   const handleClick = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("button, a, input, textarea")) return;
+    const z = zoomRef.current;
     if (mode === 'place') {
       if (notes.some((n) => n.isEditing)) return;
-      const x = e.clientX - offsetX.get() - 160;
-      const y = e.clientY - offsetY.get() - 20;
+      const x = (e.clientX - offsetX.get()) / z - 160;
+      const y = (e.clientY - offsetY.get()) / z - 20;
       handleAddNote(x, y);
     } else if (mode === 'text') {
       if (texts.some((t) => t.isEditing)) return;
-      const x = e.clientX - offsetX.get();
-      const y = e.clientY - offsetY.get();
+      const x = (e.clientX - offsetX.get()) / z;
+      const y = (e.clientY - offsetY.get()) / z;
       handleAddText(x, y);
     } else if (mode === 'textbtn') {
       if (textButtons.some((b) => b.isEditing)) return;
-      const x = e.clientX - offsetX.get();
-      const y = e.clientY - offsetY.get();
+      const x = (e.clientX - offsetX.get()) / z;
+      const y = (e.clientY - offsetY.get()) / z;
       handleAddTextButton(x, y);
     }
   };
@@ -582,6 +641,8 @@ export default function HomeContent() {
             inset: 0,
             x: offsetX,
             y: offsetY,
+            scale: zoom,
+            transformOrigin: "0 0",
           }}
         >
           {/* Red margin line */}
@@ -589,8 +650,8 @@ export default function HomeContent() {
             style={{
               position: "absolute",
               top: -2000,
-              left: "11.5vw",
-              width: "0.5vw",
+              left: 140,
+              width: 5,
               height: 5000,
               backgroundColor: "rgba(220,80,80,0.3)",
               pointerEvents: "none",
@@ -621,6 +682,7 @@ export default function HomeContent() {
               onDelete={handleDeleteDrawing}
               disabled={!!activeCursor || drawMode}
               readOnly={!isAdmin}
+              zoom={zoom}
             />
           ))}
 
@@ -632,6 +694,7 @@ export default function HomeContent() {
             isAdmin={isAdmin}
             devDrawMode={drawMode}
             onStrokeComplete={handleStrokeComplete}
+            zoom={zoom}
           />
 
           {/* Canvas images */}
@@ -643,6 +706,7 @@ export default function HomeContent() {
               onDelete={handleDeleteImage}
               disabled={!!activeCursor}
               readOnly={!isAdmin}
+              zoom={zoom}
             />
           ))}
 
@@ -657,6 +721,7 @@ export default function HomeContent() {
                 onDelete={handleDeleteText}
                 disabled={!!activeCursor}
                 readOnly={!isAdmin}
+                zoom={zoom}
               />
             ))}
           </div>
@@ -675,6 +740,7 @@ export default function HomeContent() {
                 readOnly={!isAdmin}
                 linkableElements={linkableElements}
                 onPanToElement={panToElement}
+                zoom={zoom}
               />
             ))}
           </div>
@@ -693,6 +759,7 @@ export default function HomeContent() {
               readOnly={!isAdmin}
               linkableElements={linkableElements}
               onPanToElement={panToElement}
+              zoom={zoom}
             />
           ))}
 
@@ -708,10 +775,51 @@ export default function HomeContent() {
                 cursorMode={activeCursor}
                 devMode={devMenuOpen}
                 readOnly={!isAdmin}
+                zoom={zoom}
               />
             ))}
           </div>
         </motion.div>
+
+        {/* Zoom indicator */}
+        {zoom !== 1 && (
+          <div
+            onClick={() => {
+              // Reset zoom to 100%, re-center
+              const oldZ = zoomRef.current;
+              const cx = window.innerWidth / 2;
+              const cy = window.innerHeight / 2;
+              const worldX = (cx - offsetX.get()) / oldZ;
+              const worldY = (cy - offsetY.get()) / oldZ;
+              const newOX = clampX(cx - worldX, 1);
+              const newOY = clampY(cy - worldY, 1);
+              offsetX.set(newOX);
+              offsetY.set(newOY);
+              zoomRef.current = 1;
+              setZoom(1);
+              updateRuledLines(1, newOY);
+            }}
+            style={{
+              position: 'fixed',
+              bottom: 20,
+              left: 20,
+              zIndex: 9999,
+              background: 'rgba(45,42,38,0.75)',
+              color: '#fff',
+              padding: '4px 10px',
+              borderRadius: 6,
+              fontSize: 13,
+              fontFamily: "'Caveat', cursive",
+              fontWeight: 700,
+              cursor: 'pointer',
+              userSelect: 'none',
+              pointerEvents: 'auto',
+            }}
+            title="Click to reset to 100%"
+          >
+            {Math.round(zoom * 100)}%
+          </div>
+        )}
       </div>
     </>
   );

@@ -14,6 +14,7 @@ interface StickyNoteProps {
   cursorMode?: string | null;
   devMode?: boolean;
   readOnly?: boolean;
+  zoom?: number;
 }
 export function StickyNote({
   note,
@@ -22,7 +23,8 @@ export function StickyNote({
   onDelete,
   cursorMode,
   devMode,
-  readOnly
+  readOnly,
+  zoom = 1
 }: StickyNoteProps) {
   const [rotation, setRotation] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -222,8 +224,8 @@ export function StickyNote({
         const dx = me.clientX - dragState.current.startMouseX;
         const dy = me.clientY - dragState.current.startMouseY;
         onUpdate(note.id, {
-          x: dragState.current.startNoteX + dx,
-          y: dragState.current.startNoteY + dy
+          x: dragState.current.startNoteX + dx / zoom,
+          y: dragState.current.startNoteY + dy / zoom
         });
       };
       const onUp = () => {
@@ -310,7 +312,7 @@ export function StickyNote({
       const onMove = (me: PointerEvent) => {
         if (!resizeState.current) return;
         const dx = me.clientX - resizeState.current.startMouseX;
-        const newWidth = Math.max(180, Math.min(600, resizeState.current.startWidth + dx));
+        const newWidth = Math.max(180, Math.min(600, resizeState.current.startWidth + dx / zoom));
         onUpdate(note.id, { width: newWidth });
       };
       const onUp = () => {
