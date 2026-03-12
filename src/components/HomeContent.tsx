@@ -344,8 +344,8 @@ export default function HomeContent() {
       isPanningRef.current = false;
       if (outerRef.current) outerRef.current.style.cursor = getCursor();
     };
-    window.addEventListener("mouseup", stop);
-    return () => window.removeEventListener("mouseup", stop);
+    window.addEventListener("pointerup", stop);
+    return () => window.removeEventListener("pointerup", stop);
   }, [getCursor]);
 
   const handlePointerDown = (e: React.PointerEvent) => {

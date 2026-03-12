@@ -160,7 +160,7 @@ export function Navigation({ onCursorChange, disableCursors, show = true }: Navi
       onCursorChangeRef.current?.("hand");
 
       // Drag cursor swap listeners
-      const onDown = (e: MouseEvent) => {
+      const onDown = (e: PointerEvent) => {
         if ((e.target as HTMLElement).closest("button, a, input, textarea, nav, [role='button']")) return;
         if (document.documentElement.dataset.tilting) return;
         styleEl!.textContent = `* { cursor: url(/hand-drag.png) 16 16, grabbing !important; }`;
@@ -169,12 +169,12 @@ export function Navigation({ onCursorChange, disableCursors, show = true }: Navi
         if (document.documentElement.dataset.tilting) return;
         styleEl!.textContent = handCSS;
       };
-      window.addEventListener("mousedown", onDown);
-      window.addEventListener("mouseup", onUp);
+      window.addEventListener("pointerdown", onDown);
+      window.addEventListener("pointerup", onUp);
 
       return () => {
-        window.removeEventListener("mousedown", onDown);
-        window.removeEventListener("mouseup", onUp);
+        window.removeEventListener("pointerdown", onDown);
+        window.removeEventListener("pointerup", onUp);
         document.getElementById("custom-cursor-style")?.remove();
       };
     } else {
