@@ -24,6 +24,7 @@ interface PencilCanvasProps {
   isAdmin: boolean;
   devDrawMode?: boolean; // dev toggle — draw anywhere
   onStrokeComplete?: (stroke: PencilStroke) => void;
+  zoom?: number;
 }
 
 // ─── Constants ───
@@ -115,6 +116,7 @@ export function PencilCanvas({
   isAdmin,
   devDrawMode,
   onStrokeComplete,
+  zoom = 1,
 }: PencilCanvasProps) {
   const committedRef = useRef<HTMLCanvasElement | null>(null);
   const tempRef = useRef<HTMLCanvasElement | null>(null);
@@ -236,8 +238,8 @@ export function PencilCanvas({
       const rect = displayRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const x = (e.clientX - rect.left) * (CANVAS_W / rect.width);
+      const y = (e.clientY - rect.top) * (CANVAS_H / rect.height);
 
       // Pencil button mode: constrain to original range (world y 0–4000 = canvas-local y 2000–6000)
       if (!devDrawMode && y < -CANVAS_Y_OFFSET) return;
@@ -278,8 +280,8 @@ export function PencilCanvas({
       if (!ctx) return;
 
       for (const ev of events) {
-        const x = ev.clientX - rect.left;
-        const y = ev.clientY - rect.top;
+        const x = (ev.clientX - rect.left) * (CANVAS_W / rect.width);
+        const y = (ev.clientY - rect.top) * (CANVAS_H / rect.height);
 
         // Pencil button mode: clamp to original range
         if (!devDrawMode && y < -CANVAS_Y_OFFSET) continue;

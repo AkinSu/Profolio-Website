@@ -11,9 +11,10 @@ interface CanvasTextProps {
   onDelete: (id: string) => void;
   disabled?: boolean;
   readOnly?: boolean;
+  zoom?: number;
 }
 
-export function CanvasText({ data, onUpdate, onLock, onDelete, disabled, readOnly }: CanvasTextProps) {
+export function CanvasText({ data, onUpdate, onLock, onDelete, disabled, readOnly, zoom = 1 }: CanvasTextProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [showToolbar, setShowToolbar] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -71,8 +72,8 @@ export function CanvasText({ data, onUpdate, onLock, onDelete, disabled, readOnl
       const onMove = (me: PointerEvent) => {
         if (!dragState.current) return;
         onUpdate(data.id, {
-          x: dragState.current.startX + (me.clientX - dragState.current.startMouseX),
-          y: dragState.current.startY + (me.clientY - dragState.current.startMouseY),
+          x: dragState.current.startX + (me.clientX - dragState.current.startMouseX) / zoom,
+          y: dragState.current.startY + (me.clientY - dragState.current.startMouseY) / zoom,
         });
       };
       const onUp = () => {
@@ -121,7 +122,7 @@ export function CanvasText({ data, onUpdate, onLock, onDelete, disabled, readOnl
       const startSize = data.fontSize;
       const onMove = (me: PointerEvent) => {
         const dx = me.clientX - startX;
-        const newSize = Math.max(14, Math.min(120, startSize + dx * 0.5));
+        const newSize = Math.max(14, Math.min(120, startSize + (dx / zoom) * 0.5));
         onUpdate(data.id, { fontSize: Math.round(newSize) });
       };
       const onUp = () => {

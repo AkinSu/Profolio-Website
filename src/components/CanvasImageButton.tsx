@@ -22,9 +22,10 @@ interface CanvasImageButtonProps {
   readOnly?: boolean;
   linkableElements?: LinkableElement[];
   onPanToElement?: (elementId: string) => void;
+  zoom?: number;
 }
 
-export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, devMode, cursorMode, readOnly, linkableElements, onPanToElement }: CanvasImageButtonProps) {
+export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, devMode, cursorMode, readOnly, linkableElements, onPanToElement, zoom = 1 }: CanvasImageButtonProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [selected, setSelected] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -77,8 +78,8 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
       const onMove = (me: PointerEvent) => {
         if (!dragState.current) return;
         onUpdate(data.id, {
-          x: dragState.current.startX + (me.clientX - dragState.current.startMouseX),
-          y: dragState.current.startY + (me.clientY - dragState.current.startMouseY),
+          x: dragState.current.startX + (me.clientX - dragState.current.startMouseX) / zoom,
+          y: dragState.current.startY + (me.clientY - dragState.current.startMouseY) / zoom,
         });
       };
       const onUp = () => {
@@ -105,7 +106,7 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
       const onMove = (me: PointerEvent) => {
         if (!resizeState.current) return;
         const dx = me.clientX - resizeState.current.startMouseX;
-        const newW = Math.max(40, Math.min(800, resizeState.current.startW + dx));
+        const newW = Math.max(40, Math.min(800, resizeState.current.startW + dx / zoom));
         onUpdate(data.id, { width: newW, height: newW / aspect });
       };
       const onUp = () => {
