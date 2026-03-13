@@ -37,9 +37,11 @@ export function useCanvasElements(isAdmin: boolean) {
   const [elements, setElements] = useState<CanvasElement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Always-current ref for reading elements in async callbacks
+  // Always-current refs for reading in async callbacks
   const elementsRef = useRef<CanvasElement[]>([]);
   elementsRef.current = elements;
+  const isAdminRef = useRef(isAdmin);
+  isAdminRef.current = isAdmin;
 
   // IDs that exist locally but haven't been POSTed to DB yet
   const unpersistedIds = useRef<Set<string>>(new Set());
@@ -169,6 +171,7 @@ export function useCanvasElements(isAdmin: boolean) {
 
   /** Persist a locally-added element: POST if new, immediate PUT if already persisted. */
   const persistElement = useCallback(async (id: string) => {
+    if (!isAdminRef.current) return;
     // Cancel any pending debounced update
     const timer = updateTimers.current.get(id);
     if (timer) { clearTimeout(timer); updateTimers.current.delete(id); }
@@ -216,7 +219,8 @@ export function useCanvasElements(isAdmin: boolean) {
         )
       );
 
-      // Skip API call if unpersisted or only isEditing changed
+      // Skip API call if not admin, unpersisted, or only isEditing changed
+      if (!isAdminRef.current) return;
       if (unpersistedIds.current.has(id)) return;
       const hasRealChanges = Object.keys(dataUpdates).some((k) => k !== 'isEditing');
       if (!hasRealChanges && z_index === undefined) return;
@@ -265,7 +269,7 @@ export function useCanvasElements(isAdmin: boolean) {
       return prev.filter((e) => e.id !== id);
     });
 
-    if (wasPersisted) {
+    if (wasPersisted && isAdminRef.current) {
       try {
         const res = await fetch('/api/canvas', {
           method: 'DELETE',
