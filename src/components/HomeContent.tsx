@@ -376,6 +376,16 @@ export default function HomeContent() {
     return () => window.removeEventListener("pointerup", stop);
   }, [getCursor]);
 
+  // ─── Prevent text selection when dragging from buttons ───
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const prevent = (e: Event) => e.preventDefault();
+    el.addEventListener('selectstart', prevent);
+    el.addEventListener('dragstart', prevent);
+    return () => { el.removeEventListener('selectstart', prevent); el.removeEventListener('dragstart', prevent); };
+  }, []);
+
   // ─── Wheel: Ctrl+scroll = zoom, plain scroll = vertical pan ───
   useEffect(() => {
     const el = outerRef.current;
@@ -577,6 +587,7 @@ export default function HomeContent() {
       )}
 
       <div
+        id="canvas-root"
         ref={outerRef}
         style={{
           height: "100vh",

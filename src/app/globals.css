@@ -79,6 +79,20 @@ html {
   user-select: none !important;
 }
 
+/* Prevent selection on the entire canvas area */
+#canvas-root, #canvas-root * {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  user-select: none !important;
+}
+/* Allow selection in editable fields */
+#canvas-root input,
+#canvas-root textarea {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  user-select: text !important;
+}
+
 /* Canvas styling */
 canvas {
   touch-action: none;
