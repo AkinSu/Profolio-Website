@@ -384,8 +384,10 @@ export default function HomeContent() {
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) {
         // Zoom toward cursor — proportional to delta for organic feel
+        // Don't let zoom out past the point where canvas fills viewport width
+        const minZoom = Math.max(MIN_ZOOM, window.innerWidth / CANVAS_RIGHT);
         const zoomFactor = 1 - e.deltaY * 0.01;
-        const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoomRef.current * zoomFactor));
+        const newZoom = Math.min(MAX_ZOOM, Math.max(minZoom, zoomRef.current * zoomFactor));
         if (newZoom === zoomRef.current) return;
 
         const worldX = (e.clientX - offsetX.get()) / zoomRef.current;
