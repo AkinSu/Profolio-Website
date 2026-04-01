@@ -241,9 +241,6 @@ export function PencilCanvas({
       const x = (e.clientX - rect.left) * (CANVAS_W / rect.width);
       const y = (e.clientY - rect.top) * (CANVAS_H / rect.height);
 
-      // Pencil button mode: constrain to original range (world y 0–4000 = canvas-local y 2000–6000)
-      if (!devDrawMode && y < -CANVAS_Y_OFFSET) return;
-
       const isMouse = e.pointerType === "mouse";
       const pressure = isMouse ? 0.45 : Math.max(0.1, e.pressure);
       const tiltX = isMouse ? undefined : (e.tiltX || undefined);
@@ -282,9 +279,6 @@ export function PencilCanvas({
       for (const ev of events) {
         const x = (ev.clientX - rect.left) * (CANVAS_W / rect.width);
         const y = (ev.clientY - rect.top) * (CANVAS_H / rect.height);
-
-        // Pencil button mode: clamp to original range
-        if (!devDrawMode && y < -CANVAS_Y_OFFSET) continue;
 
         const now = performance.now();
         const dt = now - lastTime.current;

@@ -43,10 +43,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid element id' }, { status: 400 });
   }
 
-  // Drawings: allow unauthenticated, but enforce 100KB size limit
+  // Drawings: allow unauthenticated, but enforce 100KB size limit + persist zone
   if (type === 'drawing') {
     if (bodyText.length > 100_000) {
       return NextResponse.json({ error: 'Drawing payload too large (max 100KB)' }, { status: 413 });
+    }
+    // Non-admin drawings must be inside the persist zone
+    const adminCheck = requireAdmin(req);
+    const isAdminUser = !adminCheck;
+    const PERSIST_ZONE = { x1: 1470, y1: 1394, x2: 4003, y2: 3010 };
+    const dx = Number(data?.x) || 0;
+    const dy = Number(data?.y) || 0;
+    const dw = Number(data?.width) || 0;
+    const dh = Number(data?.height) || 0;
+    const cx = dx + dw / 2;
+    const cy = dy + dh / 2;
+    const inZone = cx >= PERSIST_ZONE.x1 && cx <= PERSIST_ZONE.x2
+                && cy >= PERSIST_ZONE.y1 && cy <= PERSIST_ZONE.y2;
+    console.log(`[drawing POST] admin=${isAdminUser} center=(${cx},${cy}) inZone=${inZone} id=${id}`);
+    if (!isAdminUser && !inZone) {
+      console.log(`[drawing POST] BLOCKED — visitor drawing outside persist zone`);
+      return NextResponse.json({ element: { id, type, data, z_index } });
     }
   } else {
     // All other types require admin auth
