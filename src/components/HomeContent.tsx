@@ -27,8 +27,10 @@ function randomNoteColor() { return NOTE_COLORS[Math.floor(Math.random() * NOTE_
 
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 2.0;
-const ZOOM_STEP = 0.08;
 const CANVAS_RIGHT = 4000;
+
+// Visitor drawing persist zone (the big rectangle in the bottom-right)
+const PERSIST_ZONE = { x1: 1470, y1: 1394, x2: 4003, y2: 3010 };
 
 export default function HomeContent() {
   const { isAdmin, isAdminResolved, showLogin, setShowLogin, login } = useIsAdmin();
@@ -64,14 +66,24 @@ export default function HomeContent() {
     const drawingData = compressStroke(stroke.points, CANVAS_Y_OFFSET);
     if (!drawingData) return;
 
+    // Check if stroke center is inside the persist zone
+    const cx = drawingData.x + drawingData.width / 2;
+    const cy = drawingData.y + drawingData.height / 2;
+    const inZone = cx >= PERSIST_ZONE.x1 && cx <= PERSIST_ZONE.x2
+                && cy >= PERSIST_ZONE.y1 && cy <= PERSIST_ZONE.y2;
+
+    // Admin drawings always persist; visitor drawings only persist in the zone
+    const shouldPersist = isAdmin || inZone;
+    console.log(`[stroke] admin=${isAdmin} center=(${cx.toFixed(0)},${cy.toFixed(0)}) inZone=${inZone} persist=${shouldPersist}`);
+
     const id = crypto.randomUUID();
     addElement({
       id,
       type: 'drawing',
       z_index: 3,
       data: drawingData as unknown as Record<string, unknown>,
-    }, true);
-  }, [addElement]);
+    }, shouldPersist);
+  }, [addElement, isAdmin]);
 
   // Keep a ref for reading current elements in callbacks
   const elementsRef = useRef(elements);
@@ -377,6 +389,16 @@ export default function HomeContent() {
     return () => window.removeEventListener("pointerup", stop);
   }, [getCursor]);
 
+  // ─── Prevent text selection when dragging from buttons ───
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const prevent = (e: Event) => e.preventDefault();
+    el.addEventListener('selectstart', prevent);
+    el.addEventListener('dragstart', prevent);
+    return () => { el.removeEventListener('selectstart', prevent); el.removeEventListener('dragstart', prevent); };
+  }, []);
+
   // ─── Wheel: Ctrl+scroll = zoom, plain scroll = vertical pan ───
   useEffect(() => {
     const el = outerRef.current;
@@ -384,9 +406,11 @@ export default function HomeContent() {
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) {
-        // Zoom toward cursor
-        const direction = e.deltaY > 0 ? -1 : 1;
-        const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoomRef.current + direction * ZOOM_STEP));
+        // Zoom toward cursor — proportional to delta for organic feel
+        // Don't let zoom out past the point where canvas fills viewport width
+        const minZoom = Math.max(MIN_ZOOM, window.innerWidth / CANVAS_RIGHT);
+        const zoomFactor = 1 - e.deltaY * 0.01;
+        const newZoom = Math.min(MAX_ZOOM, Math.max(minZoom, zoomRef.current * zoomFactor));
         if (newZoom === zoomRef.current) return;
 
         const worldX = (e.clientX - offsetX.get()) / zoomRef.current;
@@ -401,11 +425,13 @@ export default function HomeContent() {
         setZoom(newZoom);
         updateRuledLines(newZoom, newOY);
       } else {
-        // Plain scroll = vertical pan
+        // Scroll — horizontal + vertical
+        const rawX = offsetX.get() - e.deltaX;
         const rawY = offsetY.get() - e.deltaY;
-        const clamped = clampY(rawY, zoomRef.current);
-        offsetY.set(clamped);
-        updateRuledLines(zoomRef.current, clamped);
+        offsetX.set(clampX(rawX, zoomRef.current));
+        const clampedY = clampY(rawY, zoomRef.current);
+        offsetY.set(clampedY);
+        updateRuledLines(zoomRef.current, clampedY);
       }
     };
     el.addEventListener('wheel', handleWheel, { passive: false });
@@ -460,7 +486,11 @@ export default function HomeContent() {
     const el = elementsRef.current.find((e) => e.id === elementId);
     if (!el) return;
 
-    const z = zoomRef.current;
+    // Reset zoom to default (1) when navigating to an element
+    const z = 1;
+    zoomRef.current = z;
+    setZoom(z);
+
     const x = Number(el.data.x) || 0;
     const y = Number(el.data.y) || 0;
     const w = Number(el.data.width) || 200;
@@ -570,6 +600,7 @@ export default function HomeContent() {
       )}
 
       <div
+        id="canvas-root"
         ref={outerRef}
         style={{
           height: "100vh",
