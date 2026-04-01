@@ -355,7 +355,7 @@ export function PaperCrumple({ onComplete }: PaperCrumpleProps) {
           fontFamily: "'PaperHand', cursive", letterSpacing: "0.05em",
           zIndex: 3, animation: "fadeIn 0.5s ease forwards",
         }}>
-          {/* click anywhere */}
+          click anywhere
         </div>
       )}
 

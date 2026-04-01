@@ -27,7 +27,6 @@ function randomNoteColor() { return NOTE_COLORS[Math.floor(Math.random() * NOTE_
 
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 2.0;
-const ZOOM_STEP = 0.08;
 const CANVAS_RIGHT = 4000;
 
 export default function HomeContent() {
@@ -384,9 +383,9 @@ export default function HomeContent() {
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) {
-        // Zoom toward cursor
-        const direction = e.deltaY > 0 ? -1 : 1;
-        const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoomRef.current + direction * ZOOM_STEP));
+        // Zoom toward cursor — proportional to delta for organic feel
+        const zoomFactor = 1 - e.deltaY * 0.01;
+        const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoomRef.current * zoomFactor));
         if (newZoom === zoomRef.current) return;
 
         const worldX = (e.clientX - offsetX.get()) / zoomRef.current;
@@ -401,11 +400,13 @@ export default function HomeContent() {
         setZoom(newZoom);
         updateRuledLines(newZoom, newOY);
       } else {
-        // Plain scroll = vertical pan
+        // Scroll — horizontal + vertical
+        const rawX = offsetX.get() - e.deltaX;
         const rawY = offsetY.get() - e.deltaY;
-        const clamped = clampY(rawY, zoomRef.current);
-        offsetY.set(clamped);
-        updateRuledLines(zoomRef.current, clamped);
+        offsetX.set(clampX(rawX, zoomRef.current));
+        const clampedY = clampY(rawY, zoomRef.current);
+        offsetY.set(clampedY);
+        updateRuledLines(zoomRef.current, clampedY);
       }
     };
     el.addEventListener('wheel', handleWheel, { passive: false });
