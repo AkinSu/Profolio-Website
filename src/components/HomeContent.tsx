@@ -461,7 +461,11 @@ export default function HomeContent() {
     const el = elementsRef.current.find((e) => e.id === elementId);
     if (!el) return;
 
-    const z = zoomRef.current;
+    // Reset zoom to default (1) when navigating to an element
+    const z = 1;
+    zoomRef.current = z;
+    setZoom(z);
+
     const x = Number(el.data.x) || 0;
     const y = Number(el.data.y) || 0;
     const w = Number(el.data.width) || 200;
