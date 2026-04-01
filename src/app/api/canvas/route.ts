@@ -56,13 +56,9 @@ export async function POST(req: NextRequest) {
     const dy = Number(data?.y) || 0;
     const dw = Number(data?.width) || 0;
     const dh = Number(data?.height) || 0;
-    const cx = dx + dw / 2;
-    const cy = dy + dh / 2;
-    const inZone = cx >= PERSIST_ZONE.x1 && cx <= PERSIST_ZONE.x2
-                && cy >= PERSIST_ZONE.y1 && cy <= PERSIST_ZONE.y2;
-    console.log(`[drawing POST] admin=${isAdminUser} center=(${cx},${cy}) inZone=${inZone} id=${id}`);
+    const inZone = dx >= PERSIST_ZONE.x1 && (dx + dw) <= PERSIST_ZONE.x2
+                && dy >= PERSIST_ZONE.y1 && (dy + dh) <= PERSIST_ZONE.y2;
     if (!isAdminUser && !inZone) {
-      console.log(`[drawing POST] BLOCKED — visitor drawing outside persist zone`);
       return NextResponse.json({ element: { id, type, data, z_index } });
     }
   } else {

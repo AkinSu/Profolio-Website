@@ -86,8 +86,11 @@ export function useCanvasElements(isAdmin: boolean) {
       if (!els) return;
 
       if (!isAdmin) {
-        // Visitors: full state replacement
-        setElements(els);
+        // Visitors: replace DB state but keep ephemeral (unpersisted) local drawings
+        setElements((prev) => {
+          const ephemeral = prev.filter((e) => unpersistedIds.current.has(e.id));
+          return [...els, ...ephemeral];
+        });
       } else {
         // Admin: merge — add new elements, update existing ones that aren't being edited
         // and don't have pending debounced updates

@@ -66,15 +66,13 @@ export default function HomeContent() {
     const drawingData = compressStroke(stroke.points, CANVAS_Y_OFFSET);
     if (!drawingData) return;
 
-    // Check if stroke center is inside the persist zone
-    const cx = drawingData.x + drawingData.width / 2;
-    const cy = drawingData.y + drawingData.height / 2;
-    const inZone = cx >= PERSIST_ZONE.x1 && cx <= PERSIST_ZONE.x2
-                && cy >= PERSIST_ZONE.y1 && cy <= PERSIST_ZONE.y2;
+    // Check if entire bounding box is inside the persist zone
+    const { x, y, width, height } = drawingData;
+    const inZone = x >= PERSIST_ZONE.x1 && (x + width) <= PERSIST_ZONE.x2
+                && y >= PERSIST_ZONE.y1 && (y + height) <= PERSIST_ZONE.y2;
 
-    // Admin drawings always persist; visitor drawings only persist in the zone
+    // Admin drawings always persist; visitor drawings only persist if fully in zone
     const shouldPersist = isAdmin || inZone;
-    console.log(`[stroke] admin=${isAdmin} center=(${cx.toFixed(0)},${cy.toFixed(0)}) inZone=${inZone} persist=${shouldPersist}`);
 
     const id = crypto.randomUUID();
     addElement({
