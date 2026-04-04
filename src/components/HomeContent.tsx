@@ -29,19 +29,26 @@ const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 2.0;
 const CANVAS_RIGHT = 4000;
 
-// Welcome area bounding box (side buttons through speech bubble + photo)
+// Welcome area bounding box — desktop (side buttons through speech bubble + photo)
 const WELCOME_AREA = { x1: -280, y1: 20, x2: 1100, y2: 650 };
+// Mobile crop — just photo + speech bubble, readable on small screens
+const MOBILE_WELCOME_AREA = { x1: 300, y1: 80, x2: 1200, y2: 550 };
+
+function getWelcomeArea() {
+  if (typeof window === 'undefined') return WELCOME_AREA;
+  return window.innerWidth < 768 ? MOBILE_WELCOME_AREA : WELCOME_AREA;
+}
 
 /** Compute initial zoom so the welcome area fits in the viewport */
 function getDefaultZoom(): number {
   if (typeof window === 'undefined') return 1;
-  const areaW = WELCOME_AREA.x2 - WELCOME_AREA.x1; // ~1380
-  const areaH = WELCOME_AREA.y2 - WELCOME_AREA.y1; // ~630
-  const pad = 40; // breathing room
+  const area = getWelcomeArea();
+  const areaW = area.x2 - area.x1;
+  const areaH = area.y2 - area.y1;
+  const pad = 40;
   const zoomW = (window.innerWidth - pad) / areaW;
   const zoomH = (window.innerHeight - pad) / areaH;
   const z = Math.min(zoomW, zoomH);
-  // On desktop (wide screens) cap at 1 so it doesn't over-zoom
   return Math.min(1, Math.max(MIN_ZOOM, z));
 }
 
@@ -59,6 +66,7 @@ export default function HomeContent() {
   const [drawMode, setDrawMode] = useState(false);
   const [zoom, setZoom] = useState(() => getDefaultZoom());
   const zoomRef = useRef(getDefaultZoom());
+  const defaultZoomRef = useRef(getDefaultZoom());
 
   // ─── Admin login shortcut (Ctrl/Cmd + Shift + L) ───
   useEffect(() => {
@@ -406,16 +414,25 @@ export default function HomeContent() {
   // ─── Set initial viewport to center on the welcome area ───
   useEffect(() => {
     const z = getDefaultZoom();
-    const centerX = (WELCOME_AREA.x1 + WELCOME_AREA.x2) / 2;
-    const centerY = (WELCOME_AREA.y1 + WELCOME_AREA.y2) / 2;
+    const area = getWelcomeArea();
+    const centerX = (area.x1 + area.x2) / 2;
+    const centerY = (area.y1 + area.y2) / 2;
     const initX = clampX(window.innerWidth / 2 - centerX * z, z);
     const initY = clampY(window.innerHeight / 2 - centerY * z, z);
     offsetX.set(initX);
     offsetY.set(initY);
     zoomRef.current = z;
+    defaultZoomRef.current = z;
     setZoom(z);
     updateRuledLines(z, initY);
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ─── Keep cached default zoom up to date on resize/orientation change ───
+  useEffect(() => {
+    const onResize = () => { defaultZoomRef.current = getDefaultZoom(); };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   // ─── Prevent text selection when dragging from buttons ───
@@ -501,8 +518,11 @@ export default function HomeContent() {
         const minZoom = Math.max(MIN_ZOOM, window.innerWidth / CANVAS_RIGHT);
         const newZoom = Math.min(MAX_ZOOM, Math.max(minZoom, zoomRef.current * scale));
 
-        const worldX = (center.x - offsetX.get()) / zoomRef.current;
-        const worldY = (center.y - offsetY.get()) / zoomRef.current;
+        // Unified zoom + pan: find the world point under the OLD center,
+        // then place it under the NEW center at the new zoom level.
+        // This handles both zoom-toward-center and pan in one step.
+        const worldX = (lastTouchCenter.x - offsetX.get()) / zoomRef.current;
+        const worldY = (lastTouchCenter.y - offsetY.get()) / zoomRef.current;
         const newOX = clampX(center.x - worldX * newZoom, newZoom);
         const newOY = clampY(center.y - worldY * newZoom, newZoom);
 
@@ -511,16 +531,6 @@ export default function HomeContent() {
         zoomRef.current = newZoom;
         setZoom(newZoom);
         updateRuledLines(newZoom, newOY);
-      }
-
-      // Also pan with two fingers
-      const panDx = center.x - lastTouchCenter.x;
-      const panDy = center.y - lastTouchCenter.y;
-      if (Math.abs(panDx) > 0 || Math.abs(panDy) > 0) {
-        offsetX.set(clampX(offsetX.get() + panDx, zoomRef.current));
-        const newOY = clampY(offsetY.get() + panDy, zoomRef.current);
-        offsetY.set(newOY);
-        updateRuledLines(zoomRef.current, newOY);
       }
 
       lastTouchDist = dist;
@@ -593,7 +603,7 @@ export default function HomeContent() {
     if (!el) return;
 
     // Reset zoom to default when navigating to an element
-    const z = getDefaultZoom();
+    const z = defaultZoomRef.current;
     zoomRef.current = z;
     setZoom(z);
 
@@ -920,13 +930,14 @@ export default function HomeContent() {
         </motion.div>
 
         {/* Zoom indicator */}
-        {Math.abs(zoom - getDefaultZoom()) > 0.01 && (
+        {Math.abs(zoom - defaultZoomRef.current) > 0.01 && (
           <div
             onClick={() => {
               // Reset zoom to default, re-center on welcome area
-              const dz = getDefaultZoom();
-              const centerX = (WELCOME_AREA.x1 + WELCOME_AREA.x2) / 2;
-              const centerY = (WELCOME_AREA.y1 + WELCOME_AREA.y2) / 2;
+              const dz = defaultZoomRef.current;
+              const area = getWelcomeArea();
+              const centerX = (area.x1 + area.x2) / 2;
+              const centerY = (area.y1 + area.y2) / 2;
               const newOX = clampX(window.innerWidth / 2 - centerX * dz, dz);
               const newOY = clampY(window.innerHeight / 2 - centerY * dz, dz);
               offsetX.set(newOX);
