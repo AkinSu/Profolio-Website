@@ -66,6 +66,7 @@ export default function HomeContent() {
   const [drawMode, setDrawMode] = useState(false);
   const [zoom, setZoom] = useState(() => getDefaultZoom());
   const zoomRef = useRef(getDefaultZoom());
+  const zoomMV = useMotionValue(getDefaultZoom()); // GPU-driven zoom for smooth transforms
   const defaultZoomRef = useRef(getDefaultZoom());
 
   // ─── Admin login shortcut (Ctrl/Cmd + Shift + L) ───
@@ -364,7 +365,6 @@ export default function HomeContent() {
   const didPanRef = useRef(false);
   const lastMouseRef = useRef({ x: 0, y: 0 });
   const outerRef = useRef<HTMLDivElement>(null);
-  const rulesRef = useRef<HTMLDivElement>(null);
   const [panLimitPos, setPanLimitPos] = useState<{ x: number; y: number } | null>(null);
 
   const clampX = useCallback((ox: number, z: number) => {
@@ -378,15 +378,6 @@ export default function HomeContent() {
     const maxY = 2000 * z;
     const minY = window.innerHeight - 3000 * z;
     return Math.max(minY, Math.min(maxY, oy));
-  }, []);
-
-  const updateRuledLines = useCallback((z: number, oy: number) => {
-    if (!rulesRef.current) return;
-    const spacing = 32 * z;
-    rulesRef.current.style.backgroundSize = `100% ${spacing}px`;
-    rulesRef.current.style.backgroundImage =
-      `repeating-linear-gradient(transparent, transparent ${spacing - 1}px, rgba(140,180,220,0.25) ${spacing - 1}px, rgba(140,180,220,0.25) ${spacing}px)`;
-    rulesRef.current.style.backgroundPosition = `0 ${48 * z + oy}px`;
   }, []);
 
   const disableCursors = devMenuOpen || mode === 'place' || mode === 'text' || mode === 'textbtn' || mode === 'imgbtn';
@@ -423,8 +414,9 @@ export default function HomeContent() {
     offsetY.set(initY);
     zoomRef.current = z;
     defaultZoomRef.current = z;
+    zoomMV.set(z);
     setZoom(z);
-    updateRuledLines(z, initY);
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -468,16 +460,14 @@ export default function HomeContent() {
         offsetX.set(newOX);
         offsetY.set(newOY);
         zoomRef.current = newZoom;
+        zoomMV.set(newZoom);
         setZoom(newZoom);
-        updateRuledLines(newZoom, newOY);
       } else {
         // Scroll — horizontal + vertical
         const rawX = offsetX.get() - e.deltaX;
         const rawY = offsetY.get() - e.deltaY;
         offsetX.set(clampX(rawX, zoomRef.current));
-        const clampedY = clampY(rawY, zoomRef.current);
-        offsetY.set(clampedY);
-        updateRuledLines(zoomRef.current, clampedY);
+        offsetY.set(clampY(rawY, zoomRef.current));
       }
     };
     el.addEventListener('wheel', handleWheel, { passive: false });
@@ -529,8 +519,7 @@ export default function HomeContent() {
         offsetX.set(newOX);
         offsetY.set(newOY);
         zoomRef.current = newZoom;
-        setZoom(newZoom);
-        updateRuledLines(newZoom, newOY);
+        zoomMV.set(newZoom); // GPU update — no React re-render
       }
 
       lastTouchDist = dist;
@@ -538,6 +527,10 @@ export default function HomeContent() {
     };
 
     const handleTouchEnd = () => {
+      if (isTwoFinger) {
+        // Sync React state once at gesture end (for child component props)
+        setZoom(zoomRef.current);
+      }
       isTwoFinger = false;
       lastTouchDist = 0;
     };
@@ -552,7 +545,7 @@ export default function HomeContent() {
       el.removeEventListener('touchmove', handleTouchMove);
       el.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [offsetX, offsetY, clampX, clampY, updateRuledLines]);
+  }, [offsetX, offsetY, clampX, clampY]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest("button, a, input, textarea, select")) return;
@@ -587,7 +580,6 @@ export default function HomeContent() {
       setPanLimitPos(null);
     }
 
-    updateRuledLines(z, clampedY);
   };
 
   const handlePointerUp = () => {
@@ -605,6 +597,7 @@ export default function HomeContent() {
     // Reset zoom to default when navigating to an element
     const z = defaultZoomRef.current;
     zoomRef.current = z;
+    zoomMV.set(z);
     setZoom(z);
 
     const x = Number(el.data.x) || 0;
@@ -623,12 +616,9 @@ export default function HomeContent() {
     animate(offsetY.get(), targetY, {
       duration: 0.6,
       ease: "easeInOut",
-      onUpdate: (v) => {
-        offsetY.set(v);
-        updateRuledLines(z, v);
-      },
+      onUpdate: (v) => offsetY.set(v),
     });
-  }, [offsetX, offsetY, clampX, clampY, updateRuledLines]);
+  }, [offsetX, offsetY, clampX, clampY]);
 
   const handleClick = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("button, a, input, textarea")) return;
@@ -765,23 +755,6 @@ export default function HomeContent() {
           <DevButton mode={mode} onModeChange={setMode} onOpenChange={setDevMenuOpen} onImageUpload={handleImageUpload} onImageButtonUpload={handleImageButtonUpload} drawMode={drawMode} onDrawModeChange={setDrawMode} onClearDrawings={handleClearDrawings} />
         )}
 
-        {/* Layer 1: Blue ruled lines */}
-        <div
-          ref={rulesRef}
-          style={{
-            position: "absolute",
-            top: -3000,
-            bottom: -3000,
-            left: 0,
-            right: 0,
-            pointerEvents: "none",
-            backgroundImage: "repeating-linear-gradient(transparent, transparent 31px, rgba(140,180,220,0.25) 31px, rgba(140,180,220,0.25) 32px)",
-            backgroundSize: "100% 32px",
-            backgroundPosition: "0 48px",
-            zIndex: 0,
-          }}
-        />
-
         {/* Layer 2+3: Pan layer */}
         <motion.div
           style={{
@@ -789,10 +762,27 @@ export default function HomeContent() {
             inset: 0,
             x: offsetX,
             y: offsetY,
-            scale: zoom,
+            scale: zoomMV,
             transformOrigin: "0 0",
+            willChange: "transform",
           }}
         >
+          {/* Blue ruled lines — inside motion.div so they scale with content */}
+          <div
+            style={{
+              position: "absolute",
+              top: -3000,
+              left: 0,
+              width: 99999,
+              height: 9000,
+              pointerEvents: "none",
+              backgroundImage: "repeating-linear-gradient(transparent, transparent 31px, rgba(140,180,220,0.25) 31px, rgba(140,180,220,0.25) 32px)",
+              backgroundSize: "100% 32px",
+              backgroundPosition: "0 48px",
+              zIndex: 0,
+            }}
+          />
+
           {/* Red margin line */}
           <div
             style={{
@@ -943,8 +933,8 @@ export default function HomeContent() {
               offsetX.set(newOX);
               offsetY.set(newOY);
               zoomRef.current = dz;
+              zoomMV.set(dz);
               setZoom(dz);
-              updateRuledLines(dz, newOY);
             }}
             style={{
               position: 'fixed',
