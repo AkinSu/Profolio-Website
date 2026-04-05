@@ -770,7 +770,6 @@ export default function HomeContent() {
             scale: zoomMV,
             transformOrigin: "0 0",
             willChange: "transform",
-            contain: "layout style paint",
           }}
         >
           {/* Blue ruled lines — inside motion.div so they scale with content */}
