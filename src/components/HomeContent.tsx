@@ -64,6 +64,7 @@ export default function HomeContent() {
   const pencilActiveRef = useRef(false);
   const [isUploading, setIsUploading] = useState(false);
   const [drawMode, setDrawMode] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [zoom, setZoom] = useState(() => getDefaultZoom());
   const zoomRef = useRef(getDefaultZoom());
   const zoomMV = useMotionValue(getDefaultZoom()); // GPU-driven zoom for smooth transforms
@@ -417,6 +418,8 @@ export default function HomeContent() {
     zoomMV.set(z);
     setZoom(z);
 
+    // Detect mobile device
+    setIsMobile(window.innerWidth < 768 || navigator.maxTouchPoints > 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -560,6 +563,7 @@ export default function HomeContent() {
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isPanningRef.current) return;
+    e.preventDefault();
     const dx = e.clientX - lastMouseRef.current.x;
     const dy = e.clientY - lastMouseRef.current.y;
     lastMouseRef.current = { x: e.clientX, y: e.clientY };
@@ -750,6 +754,7 @@ export default function HomeContent() {
           onCursorChange={handleCursorChange}
           disableCursors={disableCursors}
           show={overlayDone}
+          hidePencil={isMobile && !isAdmin}
         />
         {isAdmin && (
           <DevButton mode={mode} onModeChange={setMode} onOpenChange={setDevMenuOpen} onImageUpload={handleImageUpload} onImageButtonUpload={handleImageButtonUpload} drawMode={drawMode} onDrawModeChange={setDrawMode} onClearDrawings={handleClearDrawings} />
@@ -765,6 +770,7 @@ export default function HomeContent() {
             scale: zoomMV,
             transformOrigin: "0 0",
             willChange: "transform",
+            contain: "layout style paint",
           }}
         >
           {/* Blue ruled lines — inside motion.div so they scale with content */}
@@ -824,16 +830,18 @@ export default function HomeContent() {
             />
           ))}
 
-          {/* Live pencil input */}
-          <PencilCanvas
-            offsetX={offsetX}
-            offsetY={offsetY}
-            isActive={activeCursor === 'pencil' || drawMode}
-            isAdmin={isAdmin}
-            devDrawMode={drawMode}
-            onStrokeComplete={handleStrokeComplete}
-            zoom={zoom}
-          />
+          {/* Live pencil input — skip on mobile to avoid 576MB canvas crash */}
+          {(!isMobile || isAdmin) && (
+            <PencilCanvas
+              offsetX={offsetX}
+              offsetY={offsetY}
+              isActive={activeCursor === 'pencil' || drawMode}
+              isAdmin={isAdmin}
+              devDrawMode={drawMode}
+              onStrokeComplete={handleStrokeComplete}
+              zoom={zoom}
+            />
+          )}
 
           {/* Canvas images */}
           {images.map((img) => (

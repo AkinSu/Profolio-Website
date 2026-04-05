@@ -240,6 +240,7 @@ export function CanvasImage({ data, onUpdate, onDelete, disabled, readOnly, zoom
       <img
         src={data.src}
         alt="Canvas image"
+        loading="lazy"
         style={{
           width: '100%',
           height: '100%',

@@ -458,6 +458,7 @@ export function StickyNote({
                     <img
                       src={note.imageUrl}
                       alt="Upload"
+                      loading="lazy"
                       className="w-full rounded"
                       style={{ display: 'block' }}
                       draggable={false}
@@ -545,6 +546,7 @@ export function StickyNote({
                     <img
                       src={note.imageUrl}
                       alt={note.topText || 'Note image'}
+                      loading="lazy"
                       className="w-full rounded"
                       style={{ display: 'block' }}
                       draggable={false}

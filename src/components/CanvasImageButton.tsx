@@ -357,6 +357,7 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
         role="button"
         src={data.src}
         alt="Button image"
+        loading="lazy"
         style={{
           width: '100%',
           height: '100%',

@@ -89,9 +89,10 @@ interface NavigationProps {
   onCursorChange?: (cursor: string | null) => void;
   disableCursors?: boolean;
   show?: boolean;
+  hidePencil?: boolean;
 }
 
-export function Navigation({ onCursorChange, disableCursors, show = true }: NavigationProps) {
+export function Navigation({ onCursorChange, disableCursors, show = true, hidePencil }: NavigationProps) {
   // "hand" is the default cursor mode
   const [cursorMode, setCursorMode] = useState<string>("hand");
 
@@ -218,8 +219,12 @@ export function Navigation({ onCursorChange, disableCursors, show = true }: Navi
             draggable={false}
           />
           <HandDrawnButton imageSrc="/hand.png" alt="Hand" imageScale={1} onClick={handleHandClick} />
-          <ConnectionLine />
-          <HandDrawnButton imageSrc="/pencil.png" alt="Pencil" imageScale={2.5} onClick={handlePencilClick} />
+          {!hidePencil && (
+            <>
+              <ConnectionLine />
+              <HandDrawnButton imageSrc="/pencil.png" alt="Pencil" imageScale={2.5} onClick={handlePencilClick} />
+            </>
+          )}
         </div>
 
         {/* Nav links (commented out for now)
