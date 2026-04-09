@@ -31,8 +31,8 @@ const CANVAS_RIGHT = 4000;
 
 // Welcome area bounding box — desktop (side buttons through speech bubble + photo)
 const WELCOME_AREA = { x1: -280, y1: 20, x2: 1100, y2: 650 };
-// Mobile crop — just photo + speech bubble, readable on small screens
-const MOBILE_WELCOME_AREA = { x1: 300, y1: 80, x2: 1200, y2: 550 };
+// Mobile crop — just photo + speech bubble, tighter for readability on small screens
+const MOBILE_WELCOME_AREA = { x1: 200, y1: 50, x2: 900, y2: 600 };
 
 function getWelcomeArea() {
   if (typeof window === 'undefined') return WELCOME_AREA;
@@ -563,7 +563,7 @@ export default function HomeContent() {
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isPanningRef.current) return;
-    e.preventDefault();
+    if (e.pointerType === 'touch') e.preventDefault();
     const dx = e.clientX - lastMouseRef.current.x;
     const dy = e.clientY - lastMouseRef.current.y;
     lastMouseRef.current = { x: e.clientX, y: e.clientY };
