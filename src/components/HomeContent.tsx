@@ -18,6 +18,7 @@ import { PencilCanvas, PencilStroke, CANVAS_Y_OFFSET } from "@/components/Pencil
 import { DrawingElement, DrawingElementData } from "@/components/DrawingElement";
 import { EyeComponent, LidState } from "@/components/EyeComponent";
 import { DrawingGroupOverlay } from "@/components/DrawingElement";
+import { PersistZoneBorder } from "@/components/PersistZoneBorder";
 import { useCanvasElements, CanvasElement } from "@/hooks/useCanvasElements";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { AdminLogin } from "@/components/AdminLogin";
@@ -56,6 +57,36 @@ function getDefaultZoom(): number {
 
 // Visitor drawing persist zone (the big rectangle in the bottom-right)
 const PERSIST_ZONE = { x1: 1470, y1: 1394, x2: 4003, y2: 3010 };
+
+type RawPoint = { x: number; y: number; pressure: number; tiltX?: number; tiltY?: number };
+
+/**
+ * Splits a stroke into segments that lie inside the zone.
+ * Points are in canvas-local Y space; canvasYOffset converts them to world Y for zone testing.
+ * Returns an array of point-arrays (one per continuous inside run).
+ */
+function clipStrokeToZone(
+  points: RawPoint[],
+  canvasYOffset: number,
+  zone: typeof PERSIST_ZONE
+): RawPoint[][] {
+  const segments: RawPoint[][] = [];
+  let current: RawPoint[] | null = null;
+
+  for (const p of points) {
+    const wy = p.y + canvasYOffset;
+    const inside = p.x >= zone.x1 && p.x <= zone.x2 && wy >= zone.y1 && wy <= zone.y2;
+    if (inside) {
+      if (!current) current = [];
+      current.push(p);
+    } else {
+      if (current && current.length >= 2) segments.push(current);
+      current = null;
+    }
+  }
+  if (current && current.length >= 2) segments.push(current);
+  return segments;
+}
 
 export default function HomeContent() {
   const { isAdmin, isAdminResolved, showLogin, setShowLogin, login } = useIsAdmin();
@@ -107,24 +138,27 @@ export default function HomeContent() {
   } = useCanvasElements(isAdmin);
 
   const handleStrokeComplete = useCallback((stroke: PencilStroke) => {
-    const drawingData = compressStroke(stroke.points, CANVAS_Y_OFFSET);
-    if (!drawingData) return;
+    if (isAdmin) {
+      // Admin: save the full stroke as-is, always persisted
+      const drawingData = compressStroke(stroke.points, CANVAS_Y_OFFSET);
+      if (!drawingData) return;
+      addElement({
+        id: crypto.randomUUID(), type: 'drawing', z_index: 3,
+        data: { ...drawingData, sessionId: sessionIdRef.current } as unknown as Record<string, unknown>,
+      }, true);
+      return;
+    }
 
-    // Check if entire bounding box is inside the persist zone
-    const { x, y, width, height } = drawingData;
-    const inZone = x >= PERSIST_ZONE.x1 && (x + width) <= PERSIST_ZONE.x2
-                && y >= PERSIST_ZONE.y1 && (y + height) <= PERSIST_ZONE.y2;
-
-    // Admin drawings always persist; visitor drawings only persist if fully in zone
-    const shouldPersist = isAdmin || inZone;
-
-    const id = crypto.randomUUID();
-    addElement({
-      id,
-      type: 'drawing',
-      z_index: 3,
-      data: { ...drawingData, sessionId: sessionIdRef.current } as unknown as Record<string, unknown>,
-    }, shouldPersist);
+    // Visitor: clip to zone — each continuous inside segment becomes its own drawing
+    const segments = clipStrokeToZone(stroke.points, CANVAS_Y_OFFSET, PERSIST_ZONE);
+    for (const seg of segments) {
+      const drawingData = compressStroke(seg, CANVAS_Y_OFFSET);
+      if (!drawingData) continue;
+      addElement({
+        id: crypto.randomUUID(), type: 'drawing', z_index: 3,
+        data: { ...drawingData, sessionId: sessionIdRef.current } as unknown as Record<string, unknown>,
+      }, true);
+    }
   }, [addElement, isAdmin]);
 
   // Keep a ref for reading current elements in callbacks
@@ -902,6 +936,12 @@ export default function HomeContent() {
               pointerEvents: "none",
               zIndex: 1,
             }}
+          />
+
+          {/* Zone boundary — hand-drawn pencil rectangle */}
+          <PersistZoneBorder
+            x1={PERSIST_ZONE.x1} y1={PERSIST_ZONE.y1}
+            x2={PERSIST_ZONE.x2} y2={PERSIST_ZONE.y2}
           />
 
           {/* Persisted drawings */}
