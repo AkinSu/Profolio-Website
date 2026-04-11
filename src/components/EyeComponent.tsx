@@ -25,15 +25,10 @@ interface EyeProps {
   offsetY: MotionValue<number>;
   zoom: number;
   flipped?: boolean;
-  /** Shared blink state from parent */
   lidState?: LidState;
-  /** Shutdown override — highest priority, cannot be overridden by agent */
   shutState?: LidState | null;
-  /** Primary eye owns the state machine, bubble, and chat */
   primary?: boolean;
-  /** Called when this eye is clicked for the shutdown sequence */
   onShutClick?: () => void;
-  /** When true: no reactions, no bubble, no chat input */
   isShutdown?: boolean;
 }
 
@@ -57,13 +52,17 @@ function mapAgentEye(eye: string): LidState {
 }
 
 function triggerKey(trigger: string): string {
-  if (trigger.includes("arrived") || trigger.includes("viewport")) return "arrive";
+  if (trigger.includes("arrived") || trigger.includes("viewport") || trigger.includes("came back")) return "arrive";
   if (trigger.includes("panning away") || trigger.includes("leaving")) return "leave";
   if (trigger.includes("ignoring")) return "ignored";
   if (trigger.includes("poked")) return "poke";
   if (trigger.includes("zoomed")) return "zoom";
   return trigger;
 }
+
+// Triggers that should NOT override eye lid from API response
+const PASSIVE_TRIGGERS = new Set(["arrive", "leave", "ignored"]);
+
 
 function ordinal(n: number): string {
   if (n === 1) return "1st";
@@ -73,12 +72,13 @@ function ordinal(n: number): string {
 }
 
 // Pre-built instant reactions — shown immediately while API is in flight
-const INSTANT: Record<string, { texts: string[]; eye: LidState; blink: BlinkSpeed }> = {
-  arrive:  { texts: ["oh. hey.",         "oh. you're back.", "hi again."],    eye: "open", blink: "fast"   },
-  leave:   { texts: ["wait—",            "seriously??",      "FINE. LEAVE."], eye: "half", blink: "slow"   },
-  ignored: { texts: ["hello??",          "...hello?",        "I'M RIGHT HERE"], eye: "open", blink: "none" },
+// eye: null means don't touch the lid (viewport triggers should leave it alone)
+const INSTANT: Record<string, { texts: string[]; eye: LidState | null; blink: BlinkSpeed }> = {
+  arrive:  { texts: ["oh. hey.",         "oh. you're back.", "hi again."],    eye: null,   blink: "normal" },
+  leave:   { texts: ["wait—",            "seriously??",      "FINE. LEAVE."], eye: null,   blink: "normal" },
+  ignored: { texts: ["hello??",          "...hello?",        "I'M RIGHT HERE"], eye: null, blink: "none"   },
   poke:    { texts: ["OW",               "STOP IT",          "I SAID OW"],    eye: "half", blink: "fast"   },
-  zoom:    { texts: ["I can barely see you", "getting smaller...", "HEY"],    eye: "open", blink: "fast"   },
+  zoom:    { texts: ["I can barely see you", "getting smaller...", "HEY"],    eye: null,   blink: "fast"   },
 };
 
 function sleep(ms: number) {
@@ -148,6 +148,7 @@ export function EyeComponent({
 
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
 
+
   const pupilW = width * 0.20;
   const pupilH = height * 0.20;
   const pupilLeft = (width - pupilW) / 2;
@@ -197,9 +198,12 @@ export function EyeComponent({
       if (instant) {
         const idx = Math.min(count - 1, instant.texts.length - 1);
         setBubble(instant.texts[idx]);
-        setAgentLid(instant.eye);
+        if (instant.eye !== null) {
+          setAgentLid(instant.eye);
+          setTimeout(() => setAgentLid(null), 5000);
+        }
         setBlinkSpeed(instant.blink);
-        setTimeout(() => setAgentLid(null), 5000);
+        setTimeout(() => setBlinkSpeed("normal"), 5000);
       }
 
       // 2. Build escalated trigger message
@@ -208,12 +212,15 @@ export function EyeComponent({
         : trigger;
 
       // 3. Fire API in background — swap text when it arrives
+      // Passive triggers (arrive/leave/ignored) don't override lid from API
       callAgent(escalated).then((resp) => {
         if (!resp) return;
         setBubble(resp.text);
-        setAgentLid(mapAgentEye(resp.eye));
-        setBlinkSpeed(resp.blink_speed);
-        setTimeout(() => setAgentLid(null), 5000);
+        if (!PASSIVE_TRIGGERS.has(key)) {
+          setAgentLid(mapAgentEye(resp.eye));
+          setBlinkSpeed(resp.blink_speed);
+          setTimeout(() => setAgentLid(null), 5000);
+        }
       });
 
       return;
@@ -296,26 +303,19 @@ export function EyeComponent({
     };
 
     schedule();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      // If a blink was in progress when this effect re-ran, unstick the lid
+      isBlinkingRef.current = false;
+      setInternalLid("open");
+    };
   }, [lidState, blinkSpeed]);
-
-  // Instant wide-eye reaction on viewport re-entry
-  const setWideEye = useCallback(() => {
-    setAgentLid("open");
-    setBlinkSpeed("fast");
-    setTimeout(() => {
-      setAgentLid(null);
-      setBlinkSpeed("normal");
-    }, 2000);
-  }, []);
 
   // Viewport detection — stable via refs
   const fireTriggerRef = useRef(fireTrigger);
   useEffect(() => { fireTriggerRef.current = fireTrigger; }, [fireTrigger]);
   const moodRef = useRef(mood);
   useEffect(() => { moodRef.current = mood; }, [mood]);
-  const setWideEyeRef = useRef(setWideEye);
-  useEffect(() => { setWideEyeRef.current = setWideEye; }, [setWideEye]);
 
   useEffect(() => {
     if (!primary) return;
@@ -325,11 +325,8 @@ export function EyeComponent({
       const nowNearEdge = isNearEdge();
 
       if (nowInView && !inViewportRef.current) {
-        // Eye re-entered or first arrival
         inViewportRef.current = true;
         nearEdgeRef.current = false;
-        // Immediate visual: wide eyes + fast blink BEFORE text
-        setWideEyeRef.current();
         if (!hadGreetingRef.current) {
           hadGreetingRef.current = true;
           fireTriggerRef.current("user just arrived in your viewport");
@@ -343,11 +340,9 @@ export function EyeComponent({
           }
         }, IDLE_SECONDS * 1000);
       } else if (!nowInView && inViewportRef.current) {
-        // Eye fully off screen — reset state, leaving already fired near edge
         inViewportRef.current = false;
         if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       } else if (nowInView && nowNearEdge && !nearEdgeRef.current) {
-        // Eye is about to leave — still visible, user can see the reaction
         nearEdgeRef.current = true;
         fireTriggerRef.current("user is panning away from you");
       }
@@ -378,12 +373,11 @@ export function EyeComponent({
     }
   }, [primary, zoom, fireTrigger]);
 
-  // Click handler
+  // Click handler — shutdown sequence only, no poke trigger from clicks
   const handleEyeClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onShutClick) { onShutClick(); return; }
-    if (primary && !isShutdown) fireTrigger("user poked you directly in the eye");
-  }, [primary, isShutdown, fireTrigger, onShutClick]);
+    if (onShutClick) onShutClick();
+  }, [onShutClick]);
 
   // Chat submit
   const handleChatSubmit = useCallback(async (e: React.FormEvent) => {
@@ -410,6 +404,27 @@ export function EyeComponent({
           loading={bubbleLoading}
           onClick={mood !== "chatting" ? () => setMood("chatting") : undefined}
         />
+      )}
+
+      {/* "Tap to chat" hint — shown when bubble is visible and not yet chatting */}
+      {bubble && primary && !isShutdown && mood === "idle" && (
+        <div
+          style={{
+            position: "absolute",
+            left: canvasX + width * 0.52,
+            top: canvasY - height / 2 - 18,
+            fontFamily: "'PaperHand', cursive",
+            fontSize: 12,
+            color: "#9a8f84",
+            transform: "rotate(4deg)",
+            pointerEvents: "none",
+            zIndex: 13,
+            whiteSpace: "nowrap",
+            userSelect: "none",
+          }}
+        >
+          tap bubble to ask questions
+        </div>
       )}
 
       {/* Eye container */}
