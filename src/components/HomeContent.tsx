@@ -151,6 +151,19 @@ export default function HomeContent() {
 
     // Visitor: clip to zone — each continuous inside segment becomes its own drawing
     const segments = clipStrokeToZone(stroke.points, CANVAS_Y_OFFSET, PERSIST_ZONE);
+
+    if (segments.length === 0) {
+      // Entirely outside zone — show locally for this visit, don't persist
+      const drawingData = compressStroke(stroke.points, CANVAS_Y_OFFSET);
+      if (drawingData) {
+        addElement({
+          id: crypto.randomUUID(), type: 'drawing', z_index: 3,
+          data: { ...drawingData, sessionId: sessionIdRef.current } as unknown as Record<string, unknown>,
+        }, false);
+      }
+      return;
+    }
+
     for (const seg of segments) {
       const drawingData = compressStroke(seg, CANVAS_Y_OFFSET);
       if (!drawingData) continue;
