@@ -118,7 +118,11 @@ export interface DrawingElementData {
   y: number;
   width: number;
   height: number;
+  /** Original drawn pixel dimensions — canvas resolution, never changes after creation */
+  origWidth?: number;
+  origHeight?: number;
   rotation: number;
+  sessionId?: string;
   strokes: CompressedStroke[];
 }
 
@@ -140,12 +144,16 @@ export function DrawingElement({ data, onUpdate, onDelete, disabled, readOnly, z
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderedKey = useRef<string>("");
 
-  // Stable key for stroke data to avoid re-rendering
-  const strokeKey = useMemo(() => {
-    return data.strokes.map(s => s.d.length).join(',') + `_${data.width}_${data.height}`;
-  }, [data.strokes, data.width, data.height]);
+  // origW/origH: the drawn pixel resolution — fixed at creation, never changes
+  const origW = data.origWidth ?? data.width;
+  const origH = data.origHeight ?? data.height;
 
-  // Render strokes onto the canvas
+  // Stable key — only changes when strokes or original dimensions change (not on resize)
+  const strokeKey = useMemo(() => {
+    return data.strokes.map(s => s.d.length).join(',') + `_${origW}_${origH}`;
+  }, [data.strokes, origW, origH]);
+
+  // Render strokes at original pixel resolution; CSS stretches to current width/height
   useEffect(() => {
     if (renderedKey.current === strokeKey) return;
     renderedKey.current = strokeKey;
@@ -157,10 +165,9 @@ export function DrawingElement({ data, onUpdate, onDelete, disabled, readOnly, z
     if (!ctx) return;
 
     const tip = getGraphiteTip();
-    ctx.clearRect(0, 0, data.width, data.height);
+    ctx.clearRect(0, 0, origW, origH);
 
     for (const compressed of data.strokes) {
-      // Decode relative to (0,0) since canvas is positioned at (data.x, data.y)
       const points = decodeStroke(compressed, 0, 0);
       if (points.length < 2) continue;
 
@@ -171,7 +178,7 @@ export function DrawingElement({ data, onUpdate, onDelete, disabled, readOnly, z
         }
       }
     }
-  }, [strokeKey, data.strokes, data.width, data.height]);
+  }, [strokeKey, data.strokes, origW, origH]);
 
   // Click-outside to deselect
   useEffect(() => {
@@ -224,7 +231,7 @@ export function DrawingElement({ data, onUpdate, onDelete, disabled, readOnly, z
     [data.id, data.x, data.y, onUpdate]
   );
 
-  // --- Resize ---
+  // --- Resize (changes visual size; canvas pixel resolution stays fixed at origW/origH) ---
   const resizeState = useRef<{ startMouseX: number; startW: number } | null>(null);
 
   const onResizeDown = useCallback(
@@ -336,17 +343,115 @@ export function DrawingElement({ data, onUpdate, onDelete, disabled, readOnly, z
         }} />
       )}
 
-      {/* The drawing canvas — click to select (admin only) */}
+      {/* Canvas at original pixel resolution; CSS stretches to current width/height */}
       <canvas
         ref={canvasRef}
-        width={data.width}
-        height={data.height}
+        width={origW}
+        height={origH}
         style={{
           width: '100%', height: '100%',
           cursor: readOnly ? 'default' : 'pointer',
           userSelect: 'none', display: 'block',
         }}
         onClick={() => { if (!readOnly) setSelected(true); }}
+      />
+    </div>
+  );
+}
+
+// ─── Group overlay — shown in admin mode to resize all drawings from one session ───
+
+interface GroupOverlayProps {
+  group: DrawingElementData[];
+  onUpdateGroup: (updates: Array<{ id: string; x: number; y: number; width: number; height: number }>) => void;
+  zoom: number;
+}
+
+export function DrawingGroupOverlay({ group, onUpdateGroup, zoom }: GroupOverlayProps) {
+  const PAD = 10;
+
+  const bbox = useMemo(() => {
+    const minX = Math.min(...group.map(d => d.x));
+    const minY = Math.min(...group.map(d => d.y));
+    const maxX = Math.max(...group.map(d => d.x + d.width));
+    const maxY = Math.max(...group.map(d => d.y + d.height));
+    return { x: minX - PAD, y: minY - PAD, w: maxX - minX + PAD * 2, h: maxY - minY + PAD * 2, anchorX: minX, anchorY: minY };
+  }, [group]);
+
+  const dragRef = useRef<{
+    startMouseX: number;
+    startGroupW: number;
+    snapshots: Array<{ id: string; x: number; y: number; width: number; height: number }>;
+    anchorX: number;
+    anchorY: number;
+  } | null>(null);
+
+  const onResizeDown = useCallback((e: React.PointerEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    dragRef.current = {
+      startMouseX: e.clientX,
+      startGroupW: bbox.w - PAD * 2,
+      snapshots: group.map(d => ({ id: d.id, x: d.x, y: d.y, width: d.width, height: d.height })),
+      anchorX: bbox.anchorX,
+      anchorY: bbox.anchorY,
+    };
+    const onMove = (me: PointerEvent) => {
+      const dr = dragRef.current;
+      if (!dr) return;
+      const dx = (me.clientX - dr.startMouseX) / zoom;
+      const scale = Math.max(0.05, (dr.startGroupW + dx) / dr.startGroupW);
+      onUpdateGroup(dr.snapshots.map(d => ({
+        id: d.id,
+        x: dr.anchorX + (d.x - dr.anchorX) * scale,
+        y: dr.anchorY + (d.y - dr.anchorY) * scale,
+        width: d.width * scale,
+        height: d.height * scale,
+      })));
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }, [bbox, group, onUpdateGroup, zoom]);
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: bbox.x,
+        top: bbox.y,
+        width: bbox.w,
+        height: bbox.h,
+        border: '1.5px dashed rgba(99,91,82,0.45)',
+        borderRadius: 4,
+        pointerEvents: 'none',
+        zIndex: 4,
+      }}
+    >
+      {/* Label */}
+      <div style={{
+        position: 'absolute', top: -16, left: 0,
+        fontSize: 10, fontFamily: 'sans-serif',
+        color: 'rgba(99,91,82,0.6)', whiteSpace: 'nowrap',
+        pointerEvents: 'none', userSelect: 'none',
+      }}>
+        visitor ({group.length} mark{group.length !== 1 ? 's' : ''})
+      </div>
+
+      {/* Resize handle — bottom-right corner */}
+      <div
+        onPointerDown={onResizeDown}
+        title="Resize group"
+        style={{
+          position: 'absolute', right: -5, bottom: -5,
+          width: 10, height: 10,
+          background: '#635b52', borderRadius: 2,
+          cursor: 'nwse-resize', pointerEvents: 'all',
+        }}
       />
     </div>
   );

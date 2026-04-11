@@ -17,6 +17,8 @@ export interface DrawingData {
   y: number;
   width: number;
   height: number;
+  origWidth: number;
+  origHeight: number;
   rotation: number;
   strokes: CompressedStroke[];
 }
@@ -155,6 +157,8 @@ export function compressStroke(
     y: bbox.y,
     width: bbox.width,
     height: bbox.height,
+    origWidth: bbox.width,
+    origHeight: bbox.height,
     rotation: 0,
     strokes: [encoded],
   };

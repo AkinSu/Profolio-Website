@@ -17,6 +17,7 @@ import { CanvasTextButtonData, CanvasImageButtonData } from "@/hooks/useCanvasBu
 import { PencilCanvas, PencilStroke, CANVAS_Y_OFFSET } from "@/components/PencilCanvas";
 import { DrawingElement, DrawingElementData } from "@/components/DrawingElement";
 import { EyeComponent, LidState } from "@/components/EyeComponent";
+import { DrawingGroupOverlay } from "@/components/DrawingElement";
 import { useCanvasElements, CanvasElement } from "@/hooks/useCanvasElements";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { AdminLogin } from "@/components/AdminLogin";
@@ -63,6 +64,8 @@ export default function HomeContent() {
   const [devMenuOpen, setDevMenuOpen] = useState(false);
   const [activeCursor, setActiveCursor] = useState<string | null>(null);
   const pencilActiveRef = useRef(false);
+  // Stable ID for this browser session — groups all drawings made in one visit
+  const sessionIdRef = useRef(typeof crypto !== 'undefined' ? crypto.randomUUID() : '');
   const [isUploading, setIsUploading] = useState(false);
   const [drawMode, setDrawMode] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -120,7 +123,7 @@ export default function HomeContent() {
       id,
       type: 'drawing',
       z_index: 3,
-      data: drawingData as unknown as Record<string, unknown>,
+      data: { ...drawingData, sessionId: sessionIdRef.current } as unknown as Record<string, unknown>,
     }, shouldPersist);
   }, [addElement, isAdmin]);
 
@@ -302,6 +305,26 @@ export default function HomeContent() {
   const handleUpdateDrawing = useCallback((id: string, updates: Partial<DrawingElementData>) => {
     updateElement(id, updates as Record<string, unknown>);
   }, [updateElement]);
+
+  // Group all visitor drawings by sessionId for the admin overlay
+  const drawingGroups = useMemo(() => {
+    if (!isAdmin) return [];
+    const groups = new Map<string, DrawingElementData[]>();
+    for (const d of drawings) {
+      if (!d.sessionId) continue;
+      const g = groups.get(d.sessionId) ?? [];
+      g.push(d);
+      groups.set(d.sessionId, g);
+    }
+    return Array.from(groups.values());
+  }, [isAdmin, drawings]);
+
+  const handleUpdateGroup = useCallback(
+    (updates: Array<{ id: string; x: number; y: number; width: number; height: number }>) => {
+      for (const u of updates) handleUpdateDrawing(u.id, u);
+    },
+    [handleUpdateDrawing]
+  );
 
   // ─── Lock handlers (isEditing → false, then persist) ───
 
@@ -890,6 +913,16 @@ export default function HomeContent() {
               onDelete={handleDeleteDrawing}
               disabled={!!activeCursor || drawMode}
               readOnly={!isAdmin}
+              zoom={zoom}
+            />
+          ))}
+
+          {/* Group bounding-box overlays — admin only, one per visitor session */}
+          {drawingGroups.map((group) => (
+            <DrawingGroupOverlay
+              key={group[0].sessionId}
+              group={group}
+              onUpdateGroup={handleUpdateGroup}
               zoom={zoom}
             />
           ))}

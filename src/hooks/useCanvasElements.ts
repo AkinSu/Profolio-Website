@@ -25,6 +25,9 @@ function coerceData(d: Record<string, unknown>): Record<string, unknown> {
   if ('rotation' in out) out.rotation = num(out.rotation, 0);
   if ('naturalWidth' in out) out.naturalWidth = num(out.naturalWidth, 300);
   if ('naturalHeight' in out) out.naturalHeight = num(out.naturalHeight, 200);
+  // origWidth/origHeight: set from current width/height for old drawings that don't have them
+  out.origWidth = 'origWidth' in out ? num(out.origWidth, out.width as number) : out.width;
+  out.origHeight = 'origHeight' in out ? num(out.origHeight, out.height as number) : out.height;
   return out;
 }
 
