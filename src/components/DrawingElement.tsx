@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
+import React, { memo, useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { XIcon, RotateCwIcon, MoveIcon, MaximizeIcon } from 'lucide-react';
 import { decodeStroke, type CompressedStroke } from '@/lib/strokeCompression';
 
@@ -137,7 +137,7 @@ interface DrawingElementProps {
 
 // ─── Component ───
 
-export function DrawingElement({ data, onUpdate, onDelete, disabled, readOnly, zoom = 1 }: DrawingElementProps) {
+export const DrawingElement = memo(function DrawingElement({ data, onUpdate, onDelete, disabled, readOnly, zoom = 1 }: DrawingElementProps) {
   const [selected, setSelected] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -357,7 +357,7 @@ export function DrawingElement({ data, onUpdate, onDelete, disabled, readOnly, z
       />
     </div>
   );
-}
+});
 
 // ─── Group overlay — shown in admin mode to resize all drawings from one session ───
 
@@ -367,7 +367,7 @@ interface GroupOverlayProps {
   zoom: number;
 }
 
-export function DrawingGroupOverlay({ group, onUpdateGroup, zoom }: GroupOverlayProps) {
+export const DrawingGroupOverlay = memo(function DrawingGroupOverlay({ group, onUpdateGroup, zoom }: GroupOverlayProps) {
   const PAD = 10;
 
   const bbox = useMemo(() => {
@@ -455,4 +455,4 @@ export function DrawingGroupOverlay({ group, onUpdateGroup, zoom }: GroupOverlay
       />
     </div>
   );
-}
+});

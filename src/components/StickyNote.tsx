@@ -190,9 +190,8 @@ export function StickyNote({
     setIsUploadingMedia(true);
     try {
       const [uploaded] = await uploadFiles("canvasImage", { files: [file] });
-      console.log('UploadThing response:', JSON.stringify(uploaded, null, 2));
       const url = uploaded.url ?? uploaded.ufsUrl ?? (uploaded.serverData as Record<string, unknown>)?.url;
-      if (!url) { console.error('No URL in upload response:', uploaded); setIsUploadingMedia(false); return; }
+      if (!url) { setIsUploadingMedia(false); return; }
       const img = new window.Image();
       img.onload = () => {
         const newWidth = Math.max(note.width, Math.min(500, img.naturalWidth));

@@ -24,7 +24,6 @@ interface PencilCanvasProps {
   isAdmin: boolean;
   devDrawMode?: boolean; // dev toggle — draw anywhere
   onStrokeComplete?: (stroke: PencilStroke) => void;
-  zoom?: number;
 }
 
 // ─── Constants ───
@@ -116,7 +115,6 @@ export function PencilCanvas({
   isAdmin,
   devDrawMode,
   onStrokeComplete,
-  zoom = 1,
 }: PencilCanvasProps) {
   const committedRef = useRef<HTMLCanvasElement | null>(null);
   const tempRef = useRef<HTMLCanvasElement | null>(null);

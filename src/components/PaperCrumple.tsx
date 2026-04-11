@@ -98,7 +98,6 @@ export function PaperCrumple({ onComplete }: PaperCrumpleProps) {
 
   // Mount + writing timer
   useEffect(() => {
-    console.log("[PaperCrumple] Component mounted");
     setMounted(true);
     const t = setTimeout(() => setWritten(true), 1800);
     return () => clearTimeout(t);
@@ -107,15 +106,12 @@ export function PaperCrumple({ onComplete }: PaperCrumpleProps) {
   // Set up WebGL context on the canvas
   useEffect(() => {
     const canvas = canvasRef.current;
-    console.log("[PaperCrumple] WebGL setup - canvas:", canvas);
     if (!canvas) return;
 
     const gl = canvas.getContext("webgl", { alpha: true, premultipliedAlpha: false });
-    console.log("[PaperCrumple] WebGL context:", gl);
     if (!gl) return;
 
     const program = createProgram(gl);
-    console.log("[PaperCrumple] Shader program:", program);
     if (!program) return;
 
     gl.useProgram(program);
@@ -152,7 +148,6 @@ export function PaperCrumple({ onComplete }: PaperCrumpleProps) {
       cropOffsetLoc: gl.getUniformLocation(program, "uCropOffset"),
       cropScaleLoc: gl.getUniformLocation(program, "uCropScale"),
     };
-    console.log("[PaperCrumple] WebGL fully initialized, glRef set");
   }, [mounted]);
 
   // Handle canvas resize
@@ -179,18 +174,9 @@ export function PaperCrumple({ onComplete }: PaperCrumpleProps) {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const ctx = glRef.current;
-    if (!video || !canvas || !ctx) {
-      console.log("[PaperCrumple] renderFrame bail - video:", !!video, "canvas:", !!canvas, "glRef:", !!ctx);
-      return;
-    }
-    if (video.ended || video.paused) {
-      console.log("[PaperCrumple] renderFrame bail - ended:", video.ended, "paused:", video.paused);
-      return;
-    }
-    if (!renderLoopStarted.current) {
-      console.log("[PaperCrumple] Render loop started");
-      renderLoopStarted.current = true;
-    }
+    if (!video || !canvas || !ctx) return;
+    if (video.ended || video.paused) return;
+    if (!renderLoopStarted.current) renderLoopStarted.current = true;
 
     const { gl, texture, cropOffsetLoc, cropScaleLoc } = ctx;
 
@@ -232,15 +218,12 @@ export function PaperCrumple({ onComplete }: PaperCrumpleProps) {
   }, []);
 
   const handleClick = useCallback(() => {
-    console.log("[PaperCrumple] Click handler fired - crumpling:", crumpling, "written:", written);
     if (crumpling || !written) return;
     setCrumpling(true);
     const video = videoRef.current;
-    console.log("[PaperCrumple] Video element:", video, "readyState:", video?.readyState);
     if (video) {
       video.currentTime = 0;
       video.play().then(() => {
-        console.log("[PaperCrumple] Video playing - dimensions:", video.videoWidth, "x", video.videoHeight);
         renderFrame();
       }).catch((err) => {
         console.error("[PaperCrumple] Video play FAILED:", err);
@@ -250,7 +233,6 @@ export function PaperCrumple({ onComplete }: PaperCrumpleProps) {
   }, [crumpling, written, onComplete, renderFrame]);
 
   const handleVideoEnd = useCallback(() => {
-    console.log("[PaperCrumple] Video ended");
     if (rafRef.current) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -296,16 +278,10 @@ export function PaperCrumple({ onComplete }: PaperCrumpleProps) {
   }, []);
 
   if (!mounted) {
-    console.log("[PaperCrumple] Rendering pre-mount placeholder");
     return <div style={{ position: "fixed", inset: 0, backgroundColor: "#f5f5f0", zIndex: 9999 }} />;
   }
 
-  if (done) {
-    console.log("[PaperCrumple] Done, returning null");
-    return null;
-  }
-
-  console.log("[PaperCrumple] Rendering full UI - written:", written, "crumpling:", crumpling);
+  if (done) return null;
 
   return (
     <div

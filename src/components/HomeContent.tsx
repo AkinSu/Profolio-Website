@@ -265,9 +265,8 @@ export default function HomeContent() {
     setIsUploading(true);
     try {
       const [uploaded] = await uploadFiles("canvasImage", { files: [file] });
-      console.log('UploadThing response:', JSON.stringify(uploaded, null, 2));
       const url = uploaded.url ?? uploaded.ufsUrl ?? (uploaded.serverData as Record<string, unknown>)?.url;
-      if (!url) { console.error('No URL in upload response:', uploaded); setIsUploading(false); return; }
+      if (!url) { setIsUploading(false); return; }
       // Load the image to get natural dimensions
       const img = new Image();
       img.onload = () => {
@@ -298,9 +297,8 @@ export default function HomeContent() {
     setIsUploading(true);
     try {
       const [uploaded] = await uploadFiles("canvasImage", { files: [file] });
-      console.log('UploadThing response:', JSON.stringify(uploaded, null, 2));
       const url = uploaded.url ?? uploaded.ufsUrl ?? (uploaded.serverData as Record<string, unknown>)?.url;
-      if (!url) { console.error('No URL in upload response:', uploaded); setIsUploading(false); return; }
+      if (!url) { setIsUploading(false); return; }
       const img = new Image();
       img.onload = () => {
         const cx = (-offsetX.get() + window.innerWidth / 2) / zoomRef.current;
@@ -448,6 +446,7 @@ export default function HomeContent() {
   const offsetY = useMotionValue(0);
 
   const isPanningRef = useRef(false);
+  const zoomSettleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didPanRef = useRef(false);
   const lastMouseRef = useRef({ x: 0, y: 0 });
   const outerRef = useRef<HTMLDivElement>(null);
@@ -621,7 +620,9 @@ export default function HomeContent() {
         offsetY.set(newOY);
         zoomRef.current = newZoom;
         zoomMV.set(newZoom);
-        setZoom(newZoom);
+        // Debounce React state — GPU drives the visual instantly, React settles after scroll stops
+        if (zoomSettleTimer.current) clearTimeout(zoomSettleTimer.current);
+        zoomSettleTimer.current = setTimeout(() => setZoom(newZoom), 80);
       } else {
         // Scroll — horizontal + vertical
         const rawX = offsetX.get() - e.deltaX;
@@ -810,7 +811,6 @@ export default function HomeContent() {
     return () => window.removeEventListener('keydown', handleKey);
   }, []);
 
-  console.log("[HomeContent] about to render, overlayDone:", overlayDone);
 
   return (
     <>
@@ -989,7 +989,6 @@ export default function HomeContent() {
               isAdmin={isAdmin}
               devDrawMode={drawMode}
               onStrokeComplete={handleStrokeComplete}
-              zoom={zoom}
             />
           )}
 
