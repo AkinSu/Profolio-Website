@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Caveat } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
@@ -11,6 +11,11 @@ const geistSans = Geist({
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+const caveat = Caveat({
+  variable: "--font-caveat",
   subsets: ["latin"],
 });
 
@@ -37,7 +42,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning style={{ background: "#f5f5f0" }}>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${caveat.variable} antialiased`}
         suppressHydrationWarning
       >
         <Providers>{children}</Providers>

@@ -16,6 +16,7 @@ import { CanvasImageButton } from "@/components/CanvasImageButton";
 import { CanvasTextButtonData, CanvasImageButtonData } from "@/hooks/useCanvasButtons";
 import { PencilCanvas, PencilStroke, CANVAS_Y_OFFSET } from "@/components/PencilCanvas";
 import { DrawingElement, DrawingElementData } from "@/components/DrawingElement";
+import { EyeComponent, LidState } from "@/components/EyeComponent";
 import { useCanvasElements, CanvasElement } from "@/hooks/useCanvasElements";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { AdminLogin } from "@/components/AdminLogin";
@@ -65,6 +66,20 @@ export default function HomeContent() {
   const [isUploading, setIsUploading] = useState(false);
   const [drawMode, setDrawMode] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [eyeLid, setEyeLid] = useState<LidState>('open');
+  const eyeBlinkingRef = useRef(false);
+  // Per-eye shutdown state — null means normal, "half" = slowly closing, "closed" = shut forever
+  const [leftShut, setLeftShut] = useState<LidState | null>(null);
+  const [rightShut, setRightShut] = useState<LidState | null>(null);
+  // Refs track phase so callbacks never go stale — no useCallback deps needed
+  const leftPhaseRef = useRef<'open' | 'squinting' | 'closed'>('open');
+  const rightPhaseRef = useRef<'open' | 'squinting' | 'closed'>('open');
+  const leftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Timestamp of when squint started — second click only counts after 600ms
+  const leftSquintStartRef = useRef(0);
+  const rightSquintStartRef = useRef(0);
+  const isShutdown = leftShut === 'closed' && rightShut === 'closed';
   const [zoom, setZoom] = useState(() => getDefaultZoom());
   const zoomRef = useRef(getDefaultZoom());
   const zoomMV = useMotionValue(getDefaultZoom()); // GPU-driven zoom for smooth transforms
@@ -423,6 +438,78 @@ export default function HomeContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ─── Shared eye blink loop — stops permanently when shutdown ───
+  useEffect(() => {
+    if (isShutdown) return;
+    let cancelled = false;
+    const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+    const doBlink = async () => {
+      if (eyeBlinkingRef.current) return;
+      eyeBlinkingRef.current = true;
+      setEyeLid('half');
+      await sleep(80);
+      if (cancelled) return;
+      setEyeLid('closed');
+      await sleep(80);
+      if (cancelled) return;
+      setEyeLid('half');
+      await sleep(80);
+      if (cancelled) return;
+      setEyeLid('open');
+      eyeBlinkingRef.current = false;
+    };
+    const schedule = () => {
+      const delay = 6000 + Math.random() * 8000;
+      setTimeout(async () => {
+        if (cancelled) return;
+        await doBlink();
+        if (!cancelled) schedule();
+      }, delay);
+    };
+    schedule();
+    return () => { cancelled = true; };
+  }, [isShutdown]);
+
+  // ─── Per-eye shutdown click handlers ───
+  // First click → squint. Second click while squinting → close permanently.
+  // No second click within 3s → reset to open. Reads phase from ref, never stale.
+  const handleLeftShutClick = useCallback(() => {
+    if (leftPhaseRef.current === 'closed') return;
+    if (leftPhaseRef.current === 'squinting') {
+      // Only accept second click after 600ms — prevents accidental double-click closing
+      if (Date.now() - leftSquintStartRef.current < 600) return;
+      if (leftTimerRef.current) clearTimeout(leftTimerRef.current);
+      leftPhaseRef.current = 'closed';
+      setLeftShut('closed');
+      return;
+    }
+    leftPhaseRef.current = 'squinting';
+    leftSquintStartRef.current = Date.now();
+    setLeftShut('half');
+    leftTimerRef.current = setTimeout(() => {
+      leftPhaseRef.current = 'open';
+      setLeftShut(null);
+    }, 3000);
+  }, []);
+
+  const handleRightShutClick = useCallback(() => {
+    if (rightPhaseRef.current === 'closed') return;
+    if (rightPhaseRef.current === 'squinting') {
+      if (Date.now() - rightSquintStartRef.current < 600) return;
+      if (rightTimerRef.current) clearTimeout(rightTimerRef.current);
+      rightPhaseRef.current = 'closed';
+      setRightShut('closed');
+      return;
+    }
+    rightPhaseRef.current = 'squinting';
+    rightSquintStartRef.current = Date.now();
+    setRightShut('half');
+    rightTimerRef.current = setTimeout(() => {
+      rightPhaseRef.current = 'open';
+      setRightShut(null);
+    }, 3000);
+  }, []);
+
   // ─── Keep cached default zoom up to date on resize/orientation change ───
   useEffect(() => {
     const onResize = () => { defaultZoomRef.current = getDefaultZoom(); };
@@ -666,28 +753,6 @@ export default function HomeContent() {
 
       <IntroAnimation onComplete={() => setOverlayDone(true)} />
 
-      {/* Loading indicator */}
-      {isLoading && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: 80,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 9999,
-            background: 'rgba(26,26,26,0.85)',
-            color: 'rgba(255,255,255,0.7)',
-            padding: '6px 16px',
-            borderRadius: 8,
-            fontSize: 12,
-            fontFamily: 'monospace',
-            pointerEvents: 'none',
-          }}
-        >
-          loading canvas...
-        </div>
-      )}
-
       {isUploading && (
         <div
           style={{
@@ -840,6 +905,57 @@ export default function HomeContent() {
               onStrokeComplete={handleStrokeComplete}
               zoom={zoom}
             />
+          )}
+
+          {/* Eyes — primary owns state machine + bubble; both blink in sync */}
+          <EyeComponent
+            canvasX={490}
+            canvasY={2200}
+            width={60}
+            height={46}
+            offsetX={offsetX}
+            offsetY={offsetY}
+            zoom={zoom}
+            lidState={eyeLid}
+            shutState={leftShut}
+            onShutClick={!isShutdown ? handleLeftShutClick : undefined}
+            isShutdown={isShutdown}
+            primary
+          />
+          <EyeComponent
+            canvasX={565}
+            canvasY={2200}
+            width={60}
+            height={46}
+            offsetX={offsetX}
+            offsetY={offsetY}
+            zoom={zoom}
+            flipped
+            lidState={eyeLid}
+            shutState={rightShut}
+            onShutClick={!isShutdown ? handleRightShutClick : undefined}
+            isShutdown={isShutdown}
+          />
+
+          {/* Shutdown text — appears in canvas space when both eyes are closed */}
+          {isShutdown && (
+            <div
+              style={{
+                position: 'absolute',
+                left: 448,
+                top: 2256,
+                fontFamily: "'PaperHand', cursive",
+                fontSize: 18,
+                color: '#292524',
+                pointerEvents: 'none',
+                whiteSpace: 'nowrap',
+                transform: 'rotate(-2deg)',
+                zIndex: 6,
+                opacity: 0.85,
+              }}
+            >
+              okay, i&apos;m out.
+            </div>
           )}
 
           {/* Canvas images */}
