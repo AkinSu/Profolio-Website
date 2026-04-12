@@ -134,16 +134,18 @@ export function decodeStroke(stroke: CompressedStroke, originX: number, originY:
 
 export function compressStroke(
   rawPoints: Point[],
-  canvasYOffset: number
+  canvasYOffset: number,
+  canvasXOffset = 0
 ): DrawingData | null {
   if (rawPoints.length < 2) return null;
 
   const simplified = simplifyStroke(rawPoints, 1.0);
   if (simplified.length < 2) return null;
 
-  // Convert canvas-local coords to world coords (add canvas Y offset)
+  // Convert canvas-local coords to world coords
   const worldPoints = simplified.map(p => ({
     ...p,
+    x: p.x + canvasXOffset,
     y: p.y + canvasYOffset,
   }));
 

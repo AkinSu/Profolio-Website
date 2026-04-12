@@ -69,14 +69,16 @@ type RawPoint = { x: number; y: number; pressure: number; tiltX?: number; tiltY?
 function clipStrokeToZone(
   points: RawPoint[],
   canvasYOffset: number,
-  zone: typeof PERSIST_ZONE
+  zone: typeof PERSIST_ZONE,
+  canvasXOffset = 0
 ): RawPoint[][] {
   const segments: RawPoint[][] = [];
   let current: RawPoint[] | null = null;
 
   for (const p of points) {
+    const wx = p.x + canvasXOffset;
     const wy = p.y + canvasYOffset;
-    const inside = p.x >= zone.x1 && p.x <= zone.x2 && wy >= zone.y1 && wy <= zone.y2;
+    const inside = wx >= zone.x1 && wx <= zone.x2 && wy >= zone.y1 && wy <= zone.y2;
     if (inside) {
       if (!current) current = [];
       current.push(p);
@@ -138,10 +140,17 @@ export default function HomeContent() {
     addElement, persistElement, updateElement, removeElement,
   } = useCanvasElements(isAdmin);
 
+  // On mobile, use a smaller canvas that covers just the persist zone to avoid OOM crash.
+  // Desktop: full 8000×6000 world canvas. Mobile: ~82MB vs 576MB.
+  const canvasXOffset = isMobile ? 1200 : 0;
+  const canvasYOffset = isMobile ? 1100 : CANVAS_Y_OFFSET;
+  const mobileCanvasW = isMobile ? 3100 : undefined; // undefined → PencilCanvas uses its default
+  const mobileCanvasH = isMobile ? 2200 : undefined;
+
   const handleStrokeComplete = useCallback((stroke: PencilStroke) => {
     if (isAdmin) {
       // Admin: save the full stroke as-is, always persisted
-      const drawingData = compressStroke(stroke.points, CANVAS_Y_OFFSET);
+      const drawingData = compressStroke(stroke.points, canvasYOffset, canvasXOffset);
       if (!drawingData) return;
       addElement({
         id: crypto.randomUUID(), type: 'drawing', z_index: 3,
@@ -151,11 +160,11 @@ export default function HomeContent() {
     }
 
     // Visitor: clip to zone — each continuous inside segment becomes its own drawing
-    const segments = clipStrokeToZone(stroke.points, CANVAS_Y_OFFSET, PERSIST_ZONE);
+    const segments = clipStrokeToZone(stroke.points, canvasYOffset, PERSIST_ZONE, canvasXOffset);
 
     if (segments.length === 0) {
       // Entirely outside zone — show locally for this visit, don't persist
-      const drawingData = compressStroke(stroke.points, CANVAS_Y_OFFSET);
+      const drawingData = compressStroke(stroke.points, canvasYOffset, canvasXOffset);
       if (drawingData) {
         addElement({
           id: crypto.randomUUID(), type: 'drawing', z_index: 3,
@@ -166,14 +175,14 @@ export default function HomeContent() {
     }
 
     for (const seg of segments) {
-      const drawingData = compressStroke(seg, CANVAS_Y_OFFSET);
+      const drawingData = compressStroke(seg, canvasYOffset, canvasXOffset);
       if (!drawingData) continue;
       addElement({
         id: crypto.randomUUID(), type: 'drawing', z_index: 3,
         data: { ...drawingData, sessionId: sessionIdRef.current } as unknown as Record<string, unknown>,
       }, true);
     }
-  }, [addElement, isAdmin]);
+  }, [addElement, isAdmin, canvasXOffset, canvasYOffset]);
 
   // Keep a ref for reading current elements in callbacks
   const elementsRef = useRef(elements);
@@ -1001,6 +1010,10 @@ export default function HomeContent() {
               isAdmin={isAdmin}
               devDrawMode={drawMode}
               onStrokeComplete={handleStrokeComplete}
+              canvasW={mobileCanvasW}
+              canvasH={mobileCanvasH}
+              canvasXOffset={canvasXOffset}
+              canvasYOffset={canvasYOffset}
             />
           )}
 

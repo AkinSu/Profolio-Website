@@ -24,6 +24,11 @@ interface PencilCanvasProps {
   isAdmin: boolean;
   devDrawMode?: boolean; // dev toggle — draw anywhere
   onStrokeComplete?: (stroke: PencilStroke) => void;
+  // Optional overrides — use smaller values on mobile to avoid OOM crash
+  canvasW?: number;
+  canvasH?: number;
+  canvasXOffset?: number;
+  canvasYOffset?: number;
 }
 
 // ─── Constants ───
@@ -115,6 +120,10 @@ export function PencilCanvas({
   isAdmin,
   devDrawMode,
   onStrokeComplete,
+  canvasW: CW = CANVAS_W,
+  canvasH: CH = CANVAS_H,
+  canvasXOffset: CX = 0,
+  canvasYOffset: CY = CANVAS_Y_OFFSET,
 }: PencilCanvasProps) {
   const committedRef = useRef<HTMLCanvasElement | null>(null);
   const tempRef = useRef<HTMLCanvasElement | null>(null);
@@ -199,7 +208,7 @@ export function PencilCanvas({
       const ctx = display.getContext("2d");
       if (!ctx) return;
 
-      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+      ctx.clearRect(0, 0, CW, CH);
       ctx.drawImage(committed, 0, 0);
 
       if (isDrawing.current) {
@@ -230,14 +239,14 @@ export function PencilCanvas({
       const temp = tempRef.current;
       if (temp) {
         const ctx = temp.getContext("2d");
-        if (ctx) ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+        if (ctx) ctx.clearRect(0, 0, CW, CH);
       }
 
       const rect = displayRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      const x = (e.clientX - rect.left) * (CANVAS_W / rect.width);
-      const y = (e.clientY - rect.top) * (CANVAS_H / rect.height);
+      const x = (e.clientX - rect.left) * (CW / rect.width);
+      const y = (e.clientY - rect.top) * (CH / rect.height);
 
       const isMouse = e.pointerType === "mouse";
       const pressure = isMouse ? 0.45 : Math.max(0.1, e.pressure);
@@ -275,8 +284,8 @@ export function PencilCanvas({
       if (!ctx) return;
 
       for (const ev of events) {
-        const x = (ev.clientX - rect.left) * (CANVAS_W / rect.width);
-        const y = (ev.clientY - rect.top) * (CANVAS_H / rect.height);
+        const x = (ev.clientX - rect.left) * (CW / rect.width);
+        const y = (ev.clientY - rect.top) * (CH / rect.height);
 
         const now = performance.now();
         const dt = now - lastTime.current;
@@ -331,7 +340,7 @@ export function PencilCanvas({
           ctx.globalAlpha = 1.0;
         }
         const tempCtx = temp.getContext("2d");
-        if (tempCtx) tempCtx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+        if (tempCtx) tempCtx.clearRect(0, 0, CW, CH);
       }
 
       needsRender.current = true;
@@ -350,8 +359,8 @@ export function PencilCanvas({
     position: "absolute",
     top: 0,
     left: 0,
-    width: CANVAS_W,
-    height: CANVAS_H,
+    width: CW,
+    height: CH,
   };
 
   if (!isActive && !isAdmin) return null;
@@ -360,10 +369,10 @@ export function PencilCanvas({
     <div
       style={{
         position: "absolute",
-        top: CANVAS_Y_OFFSET,
-        left: 0,
-        width: CANVAS_W,
-        height: CANVAS_H,
+        top: CY,
+        left: CX,
+        width: CW,
+        height: CH,
         zIndex: 3,
         pointerEvents: isActive ? "auto" : "none",
         touchAction: "none",
@@ -371,20 +380,20 @@ export function PencilCanvas({
     >
       <canvas
         ref={committedRef}
-        width={CANVAS_W}
-        height={CANVAS_H}
+        width={CW}
+        height={CH}
         style={{ ...canvasStyle, visibility: "hidden" }}
       />
       <canvas
         ref={tempRef}
-        width={CANVAS_W}
-        height={CANVAS_H}
+        width={CW}
+        height={CH}
         style={{ ...canvasStyle, visibility: "hidden" }}
       />
       <canvas
         ref={displayRef}
-        width={CANVAS_W}
-        height={CANVAS_H}
+        width={CW}
+        height={CH}
         style={{ ...canvasStyle, visibility: "visible" }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
