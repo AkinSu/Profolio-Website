@@ -503,10 +503,9 @@ export default function HomeContent() {
     zoomMV.set(z);
     setZoom(z);
 
-    // Detect mobile device — skip intro and hide nav buttons on mobile
+    // Detect mobile device
     const mobile = window.innerWidth < 768 || navigator.maxTouchPoints > 0;
     setIsMobile(mobile);
-    if (mobile) setOverlayDone(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -824,7 +823,7 @@ export default function HomeContent() {
         />
       )}
 
-      {!isMobile && <IntroAnimation onComplete={() => setOverlayDone(true)} />}
+      <IntroAnimation onComplete={() => setOverlayDone(true)} />
 
       {isUploading && (
         <div
@@ -866,8 +865,8 @@ export default function HomeContent() {
         onClick={handleClick}
       >
 
-        {/* Mobile pencil FAB — only for non-admin mobile visitors */}
-        {isMobile && !isAdmin && (
+        {/* Mobile pencil FAB — only for non-admin mobile visitors, after intro completes */}
+        {isMobile && !isAdmin && overlayDone && (
           <MobilePencilFAB
             isActive={activeCursor === 'pencil'}
             onToggle={() => handleCursorChange(activeCursor === 'pencil' ? null : 'pencil')}
