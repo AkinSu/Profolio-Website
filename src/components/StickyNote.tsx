@@ -355,7 +355,7 @@ export function StickyNote({
         transform: `rotate(${rotation}deg)`,
         pointerEvents: isCursorActive ? 'none' : 'auto',
       }}
-      onPointerDown={(e) => e.stopPropagation()}>
+      onPointerDown={(e) => { if (!readOnly) e.stopPropagation(); }}>
 
       {/* Thumb tack — only when locked, draggable for admins */}
       {!note.isEditing &&

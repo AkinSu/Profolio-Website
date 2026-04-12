@@ -237,7 +237,7 @@ export function CanvasTextButton({ data, onUpdate, onLock, onDelete, disabled, d
         transformOrigin: 'center center',
         pointerEvents: disabled ? 'none' : 'auto',
       }}
-      onPointerDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => { if (!readOnly) e.stopPropagation(); }}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleRightClick}
     >

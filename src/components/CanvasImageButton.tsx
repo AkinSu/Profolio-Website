@@ -186,7 +186,7 @@ export function CanvasImageButton({ data, onUpdate, onLock, onDelete, disabled, 
         zIndex: isDragging ? 200 : data.isEditing || selected ? 50 : 8,
         pointerEvents: disabled ? 'none' : 'auto',
       }}
-      onPointerDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => { if (!readOnly) e.stopPropagation(); }}
     >
       {/* Toolbar (admin only) */}
       {!readOnly && (selected || data.isEditing) && (
