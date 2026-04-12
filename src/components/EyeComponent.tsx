@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { MotionValue } from "framer-motion";
 import { SpeechBubble } from "./SpeechBubble";
 
@@ -30,6 +31,7 @@ interface EyeProps {
   primary?: boolean;
   onShutClick?: () => void;
   isShutdown?: boolean;
+  isMobile?: boolean;
 }
 
 const LID_SRC: Record<LidState, string> = {
@@ -117,6 +119,7 @@ export function EyeComponent({
   primary = false,
   onShutClick,
   isShutdown = false,
+  isMobile = false,
 }: EyeProps) {
   const pupilRef = useRef<HTMLImageElement>(null);
 
@@ -477,72 +480,142 @@ export function EyeComponent({
         )}
       </div>
 
-      {/* Chat input — canvas space, counter-scaled, disabled on shutdown */}
+      {/* Chat input — fixed to viewport bottom on mobile, canvas-space on desktop */}
       {primary && mood === "chatting" && !isShutdown && (
-        <div
-          style={{
-            position: "absolute",
-            left: canvasX - 120,
-            top: canvasY + height / 2 + 20,
-            zIndex: 1000,
-            pointerEvents: "all",
-            transform: `scale(${1 / zoom})`,
-            transformOrigin: "top left",
-          }}
-        >
-          <form onSubmit={handleChatSubmit} style={{ display: "flex", gap: 6 }}>
-            <input
-              autoFocus
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              placeholder="ask me about Akin..."
-              disabled={chatLoading}
+        isMobile
+          ? createPortal(
+              <div
+                style={{
+                  position: "fixed",
+                  bottom: 100,
+                  left: 0,
+                  right: 0,
+                  zIndex: 9990,
+                  display: "flex",
+                  justifyContent: "center",
+                  padding: "0 16px",
+                  pointerEvents: "all",
+                }}
+              >
+                <form onSubmit={handleChatSubmit} style={{ display: "flex", gap: 6, width: "100%", maxWidth: 400 }}>
+                  <input
+                    autoFocus
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder="ask me about Akin..."
+                    disabled={chatLoading}
+                    style={{
+                      flex: 1,
+                      padding: "8px 12px",
+                      fontFamily: "'PaperHand', cursive",
+                      fontSize: 16,
+                      background: "#f5f5f0",
+                      border: "1.5px solid #292524",
+                      borderRadius: 4,
+                      outline: "none",
+                      color: "#292524",
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={chatLoading}
+                    style={{
+                      padding: "8px 14px",
+                      fontFamily: "'PaperHand', cursive",
+                      fontSize: 15,
+                      background: "#292524",
+                      color: "#f5f5f0",
+                      border: "none",
+                      borderRadius: 4,
+                      cursor: chatLoading ? "wait" : "pointer",
+                    }}
+                  >
+                    {chatLoading ? "..." : "ask"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMood("idle")}
+                    style={{
+                      padding: "8px 10px",
+                      fontFamily: "'PaperHand', cursive",
+                      fontSize: 15,
+                      background: "transparent",
+                      color: "#999",
+                      border: "1px solid #ccc",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ✕
+                  </button>
+                </form>
+              </div>,
+              document.body
+            )
+          : <div
               style={{
-                width: 220,
-                padding: "6px 10px",
-                fontFamily: "'PaperHand', cursive",
-                fontSize: 15,
-                background: "#f5f5f0",
-                border: "1.5px solid #292524",
-                borderRadius: 4,
-                outline: "none",
-                color: "#292524",
-              }}
-            />
-            <button
-              type="submit"
-              disabled={chatLoading}
-              style={{
-                padding: "6px 10px",
-                fontFamily: "'PaperHand', cursive",
-                fontSize: 15,
-                background: "#292524",
-                color: "#f5f5f0",
-                border: "none",
-                borderRadius: 4,
-                cursor: chatLoading ? "wait" : "pointer",
+                position: "absolute",
+                left: canvasX - 120,
+                top: canvasY + height / 2 + 20,
+                zIndex: 1000,
+                pointerEvents: "all",
+                transform: `scale(${1 / zoom})`,
+                transformOrigin: "top left",
               }}
             >
-              {chatLoading ? "..." : "ask"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setMood("idle")}
-              style={{
-                padding: "6px 8px",
-                fontFamily: "'PaperHand', cursive",
-                fontSize: 13,
-                background: "transparent",
-                color: "#999",
-                border: "1px solid #ccc",
-                borderRadius: 4,
-                cursor: "pointer",
-              }}
-            >
-              ✕
-            </button>
-          </form>
-        </div>
+              <form onSubmit={handleChatSubmit} style={{ display: "flex", gap: 6 }}>
+                <input
+                  autoFocus
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="ask me about Akin..."
+                  disabled={chatLoading}
+                  style={{
+                    width: 220,
+                    padding: "6px 10px",
+                    fontFamily: "'PaperHand', cursive",
+                    fontSize: 15,
+                    background: "#f5f5f0",
+                    border: "1.5px solid #292524",
+                    borderRadius: 4,
+                    outline: "none",
+                    color: "#292524",
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={chatLoading}
+                  style={{
+                    padding: "6px 10px",
+                    fontFamily: "'PaperHand', cursive",
+                    fontSize: 15,
+                    background: "#292524",
+                    color: "#f5f5f0",
+                    border: "none",
+                    borderRadius: 4,
+                    cursor: chatLoading ? "wait" : "pointer",
+                  }}
+                >
+                  {chatLoading ? "..." : "ask"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMood("idle")}
+                  style={{
+                    padding: "6px 8px",
+                    fontFamily: "'PaperHand', cursive",
+                    fontSize: 13,
+                    background: "transparent",
+                    color: "#999",
+                    border: "1px solid #ccc",
+                    borderRadius: 4,
+                    cursor: "pointer",
+                  }}
+                >
+                  ✕
+                </button>
+              </form>
+            </div>
       )}
     </>
   );

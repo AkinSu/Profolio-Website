@@ -985,7 +985,7 @@ export default function HomeContent() {
               data={d}
               onUpdate={handleUpdateDrawing}
               onDelete={handleDeleteDrawing}
-              disabled={!!activeCursor || drawMode}
+              disabled={!!activeCursor || drawMode || (isMobile && !isAdmin)}
               readOnly={!isAdmin}
               zoom={zoom}
             />
@@ -1030,6 +1030,7 @@ export default function HomeContent() {
             shutState={leftShut}
             onShutClick={!isShutdown ? handleLeftShutClick : undefined}
             isShutdown={isShutdown}
+            isMobile={isMobile}
             primary
           />
           <EyeComponent
@@ -1045,6 +1046,7 @@ export default function HomeContent() {
             shutState={rightShut}
             onShutClick={!isShutdown ? handleRightShutClick : undefined}
             isShutdown={isShutdown}
+            isMobile={isMobile}
           />
 
           {/* Shutdown text — appears in canvas space when both eyes are closed */}
@@ -1075,7 +1077,7 @@ export default function HomeContent() {
               data={img}
               onUpdate={handleUpdateImage}
               onDelete={handleDeleteImage}
-              disabled={!!activeCursor}
+              disabled={!!activeCursor || (isMobile && !isAdmin)}
               readOnly={!isAdmin}
               zoom={zoom}
             />
@@ -1090,7 +1092,7 @@ export default function HomeContent() {
                 onUpdate={handleUpdateText}
                 onLock={handleLockText}
                 onDelete={handleDeleteText}
-                disabled={!!activeCursor}
+                disabled={!!activeCursor || (isMobile && !isAdmin)}
                 readOnly={!isAdmin}
                 zoom={zoom}
               />
