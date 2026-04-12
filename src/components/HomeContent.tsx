@@ -502,8 +502,10 @@ export default function HomeContent() {
     zoomMV.set(z);
     setZoom(z);
 
-    // Detect mobile device
-    setIsMobile(window.innerWidth < 768 || navigator.maxTouchPoints > 0);
+    // Detect mobile device — skip intro and hide nav buttons on mobile
+    const mobile = window.innerWidth < 768 || navigator.maxTouchPoints > 0;
+    setIsMobile(mobile);
+    if (mobile) setOverlayDone(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -821,7 +823,7 @@ export default function HomeContent() {
         />
       )}
 
-      <IntroAnimation onComplete={() => setOverlayDone(true)} />
+      {!isMobile && <IntroAnimation onComplete={() => setOverlayDone(true)} />}
 
       {isUploading && (
         <div
@@ -885,12 +887,14 @@ export default function HomeContent() {
           </div>
         )}
 
-        <Navigation
-          onCursorChange={handleCursorChange}
-          disableCursors={disableCursors}
-          show={overlayDone}
-          hidePencil={isMobile && !isAdmin}
-        />
+        {(!isMobile || isAdmin) && (
+          <Navigation
+            onCursorChange={handleCursorChange}
+            disableCursors={disableCursors}
+            show={overlayDone}
+            hidePencil={false}
+          />
+        )}
         {isAdmin && (
           <DevButton mode={mode} onModeChange={setMode} onOpenChange={setDevMenuOpen} onImageUpload={handleImageUpload} onImageButtonUpload={handleImageButtonUpload} drawMode={drawMode} onDrawModeChange={setDrawMode} onClearDrawings={handleClearDrawings} />
         )}
