@@ -19,6 +19,7 @@ import { DrawingElement, DrawingElementData } from "@/components/DrawingElement"
 import { EyeComponent, LidState } from "@/components/EyeComponent";
 import { DrawingGroupOverlay } from "@/components/DrawingElement";
 import { PersistZoneBorder } from "@/components/PersistZoneBorder";
+import { MobilePencilFAB } from "@/components/MobilePencilFAB";
 import { useCanvasElements, CanvasElement } from "@/hooks/useCanvasElements";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { AdminLogin } from "@/components/AdminLogin";
@@ -865,6 +866,14 @@ export default function HomeContent() {
         onClick={handleClick}
       >
 
+        {/* Mobile pencil FAB — only for non-admin mobile visitors */}
+        {isMobile && !isAdmin && (
+          <MobilePencilFAB
+            isActive={activeCursor === 'pencil'}
+            onToggle={() => handleCursorChange(activeCursor === 'pencil' ? null : 'pencil')}
+          />
+        )}
+
         {/* Pan limit indicator */}
         {panLimitPos && (
           <div
@@ -984,8 +993,8 @@ export default function HomeContent() {
             />
           ))}
 
-          {/* Live pencil input — skip on mobile to avoid 576MB canvas crash */}
-          {(!isMobile || isAdmin) && (
+          {/* Live pencil input — mounted only when active on mobile to conserve memory */}
+          {(activeCursor === 'pencil' || drawMode || !isMobile || isAdmin) && (
             <PencilCanvas
               offsetX={offsetX}
               offsetY={offsetY}
