@@ -1,14 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Box, Flex, Text, HStack } from "@chakra-ui/react";
 import { motion } from "framer-motion";
-import Link from "next/link";
 import Image from "next/image";
 
-
-const MotionBox = motion.create(Box);
-const MotionText = motion.create(Text);
 
 const WobblyRect = () => (
   <svg
@@ -89,13 +84,6 @@ const HandDrawnButton = ({ imageSrc, alt, imageScale = 1, rotate = 0, onClick }:
     </button>
   );
 };
-
-const navItems = [
-  { name: "Home", href: "/" },
-  { name: "Projects", href: "/projects" },
-  { name: "About", href: "/about" },
-  { name: "Contact", href: "/contact" },
-];
 
 interface NavigationProps {
   onCursorChange?: (cursor: string | null) => void;
@@ -204,22 +192,22 @@ export function Navigation({ onCursorChange, disableCursors, show = true, hidePe
   const handleHandClick = () => setCursorMode("hand");
 
   return (
-    <MotionBox
-      as="nav"
+    <motion.nav
       className="no-select"
-      position="fixed"
-      top={0}
-      left={0}
-      right={0}
-      zIndex={100}
-      px={8}
-      py={3}
-      style={{ pointerEvents: 'none' }}
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 100,
+        padding: "12px 32px",
+        pointerEvents: "none",
+      }}
       initial={{ y: -100, opacity: 0 }}
       animate={show ? { y: 0, opacity: 1 } : { y: -100, opacity: 0 }}
       transition={{ duration: 0.8, ease: "easeOut" }}
     >
-      <Flex justify="center" align="center" maxW="1400px" mx="auto">
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", maxWidth: 1400, margin: "0 auto" }}>
         {/* Center: Hand-drawn buttons */}
         <div style={{ position: "relative", width: 230, height: 110, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <Image
@@ -239,33 +227,7 @@ export function Navigation({ onCursorChange, disableCursors, show = true, hidePe
           )}
         </div>
 
-        {/* Nav links (commented out for now)
-        <HStack gap={8}>
-          {navItems.map((item, i) => (
-            <MotionBox
-              key={item.name}
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 + i * 0.1 }}
-            >
-              <Link href={item.href}>
-                <Text
-                  color="gray.600"
-                  fontSize="sm"
-                  fontWeight="medium"
-                  letterSpacing="wide"
-                  _hover={{ color: "gray.900" }}
-                  transition="color 0.2s"
-                  cursor="pointer"
-                >
-                  {item.name}
-                </Text>
-              </Link>
-            </MotionBox>
-          ))}
-        </HStack>
-        */}
-      </Flex>
-    </MotionBox>
+      </div>
+    </motion.nav>
   );
 }
