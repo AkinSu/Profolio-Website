@@ -48,35 +48,47 @@ interface HandDrawnButtonProps {
   imageSrc: string;
   alt: string;
   imageScale?: number; // 1 = default size
+  rotate?: number;     // degrees; negative = counter-clockwise
   onClick?: () => void;
 }
 
-const HandDrawnButton = ({ imageSrc, alt, imageScale = 1, onClick }: HandDrawnButtonProps) => (
-  <button
-    style={{ position: "relative", width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center", outline: "none", zIndex: 10, pointerEvents: "auto" }}
-    className="transition-all duration-150 ease-out drop-shadow-[2px_2px_0_rgba(0,0,0,0.12)] hover:translate-y-px hover:scale-[0.97] active:-translate-y-px active:scale-[1.03]"
-    aria-label={alt}
-    onClick={onClick}
-  >
-    <WobblyRect />
-    <Image
-      src={imageSrc}
-      alt={alt}
-      width={36}
-      height={36}
-      style={{
-        position: "relative",
-        zIndex: 10,
-        objectFit: "contain",
-        mixBlendMode: "multiply",
-        userSelect: "none",
-        transform: `scale(${imageScale})`,
-        transformOrigin: "center",
-      }}
-      draggable={false}
-    />
-  </button>
-);
+// Layout box for the button image. The on-screen size comes from the CSS transform
+// below, which next/image cannot see — it sizes the served asset from the width/height
+// props alone. So those must account for imageScale, or a 2.5x button ships a 36px
+// thumbnail and stretches it 2.5x. The extra 2x covers retina displays.
+const IMG_BOX = 36;
+
+const HandDrawnButton = ({ imageSrc, alt, imageScale = 1, rotate = 0, onClick }: HandDrawnButtonProps) => {
+  const intrinsic = Math.round(IMG_BOX * imageScale * 2);
+  return (
+    <button
+      style={{ position: "relative", width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center", outline: "none", zIndex: 10, pointerEvents: "auto" }}
+      className="transition-all duration-150 ease-out drop-shadow-[2px_2px_0_rgba(0,0,0,0.12)] hover:translate-y-px hover:scale-[0.97] active:-translate-y-px active:scale-[1.03]"
+      aria-label={alt}
+      onClick={onClick}
+    >
+      <WobblyRect />
+      <Image
+        src={imageSrc}
+        alt={alt}
+        width={intrinsic}
+        height={intrinsic}
+        style={{
+          position: "relative",
+          zIndex: 10,
+          width: IMG_BOX,
+          height: IMG_BOX,
+          objectFit: "contain",
+          mixBlendMode: "multiply",
+          userSelect: "none",
+          transform: `rotate(${rotate}deg) scale(${imageScale})`,
+          transformOrigin: "center",
+        }}
+        draggable={false}
+      />
+    </button>
+  );
+};
 
 const navItems = [
   { name: "Home", href: "/" },
@@ -222,7 +234,7 @@ export function Navigation({ onCursorChange, disableCursors, show = true, hidePe
           {!hidePencil && (
             <>
               <ConnectionLine />
-              <HandDrawnButton imageSrc="/pencil.png" alt="Pencil" imageScale={2.5} onClick={handlePencilClick} />
+              <HandDrawnButton imageSrc="/pencil.png" alt="Pencil" imageScale={1.0} rotate={-20} onClick={handlePencilClick} />
             </>
           )}
         </div>
