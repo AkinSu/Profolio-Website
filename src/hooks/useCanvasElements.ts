@@ -52,18 +52,30 @@ export function useCanvasElements(isAdmin: boolean) {
   // Debounce timers for PUT updates
   const updateTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
+  // Whether the last fetch failed — used to log a failure streak once, not per poll
+  const fetchFailedRef = useRef(false);
+
   // Fetch from API, coerce numbers, mark all as not editing
   const fetchElements = useCallback(async (): Promise<CanvasElement[] | null> => {
     try {
       const res = await fetch('/api/canvas');
       if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
       const json = await res.json();
+      if (fetchFailedRef.current) {
+        fetchFailedRef.current = false;
+        console.info('Canvas elements loading again.');
+      }
       return (json.elements || []).map((e: CanvasElement) => ({
         ...e,
         data: { ...coerceData(e.data), isEditing: false },
       }));
     } catch (err) {
-      console.error('Failed to load canvas elements:', err);
+      // The poll retries every 2s. Log the first failure of a streak and stay quiet
+      // until it recovers, so one outage doesn't flood the console indefinitely.
+      if (!fetchFailedRef.current) {
+        fetchFailedRef.current = true;
+        console.error('Failed to load canvas elements (further retries silenced until recovery):', err);
+      }
       return null;
     }
   }, []);
