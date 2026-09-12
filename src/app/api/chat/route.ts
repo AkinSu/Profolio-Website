@@ -56,6 +56,17 @@ const MAX_QUESTION = 500;
 const MAX_HISTORY = 20;
 const MAX_HISTORY_CONTENT = 1_000;
 
+// Reason codes the agent may report. Anything outside this set is discarded, so a
+// compromised or misbehaving upstream can't push arbitrary text to the browser.
+const KNOWN_REASONS = new Set([
+  "out_of_credits",
+  "rate_limited",
+  "bad_key",
+  "upstream_error",
+  "upstream_unreachable",
+  "unknown",
+]);
+
 interface HistoryEntry {
   role: string;
   content: string;
@@ -110,12 +121,28 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ trigger, question, history }),
     });
+
     if (!res.ok) {
-      // Don't forward the upstream body — it can leak agent internals
-      return NextResponse.json({ error: "Agent error" }, { status: res.status });
+      // Forward only a code from our own whitelist — never the upstream body,
+      // which can carry raw provider errors and agent internals.
+      let reason = "upstream_error";
+      try {
+        const body = (await res.json()) as { detail?: unknown };
+        if (typeof body.detail === "string" && KNOWN_REASONS.has(body.detail)) {
+          reason = body.detail;
+        }
+      } catch {
+        // non-JSON upstream response; keep the default
+      }
+      return NextResponse.json({ error: "Agent error", reason }, { status: res.status });
     }
+
     return NextResponse.json(await res.json());
   } catch {
-    return NextResponse.json({ error: "Agent unavailable" }, { status: 503 });
+    // Couldn't reach the agent at all — it's asleep, redeploying, or misconfigured
+    return NextResponse.json(
+      { error: "Agent unavailable", reason: "agent_down" },
+      { status: 503 }
+    );
   }
 }

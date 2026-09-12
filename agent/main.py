@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Optional
 import uvicorn
 
-from eye_agent import call_agent
+from eye_agent import call_agent, AgentUnavailable
 
 app = FastAPI(title="Eye Agent API")
 
@@ -41,8 +41,11 @@ async def chat(req: ChatRequest):
             blink_speed=result.get("blink_speed", "normal"),
             intensity=float(result.get("intensity", 0.5)),
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except AgentUnavailable as e:
+        # detail carries the reason code, not a raw error string
+        raise HTTPException(status_code=503, detail=e.reason)
+    except Exception:
+        raise HTTPException(status_code=500, detail="unknown")
 
 
 @app.get("/health")
