@@ -5,6 +5,33 @@ from config import ANTHROPIC_API_KEY
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
+
+class AgentUnavailable(Exception):
+    """The model call failed. `reason` is a stable code the frontend maps to a line
+    of dialogue, so it must stay in sync with the whitelist in /api/chat."""
+
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(reason)
+
+
+def classify_error(exc: Exception) -> str:
+    """Map an SDK exception onto one of our stable reason codes."""
+    if isinstance(exc, anthropic.RateLimitError):
+        return "rate_limited"
+    if isinstance(exc, anthropic.AuthenticationError):
+        return "bad_key"
+    if isinstance(exc, anthropic.APIConnectionError):
+        return "upstream_unreachable"
+    if isinstance(exc, anthropic.APIStatusError):
+        # Credit exhaustion arrives as a 400 invalid_request_error whose message
+        # reads "Your credit balance is too low to access the Anthropic API".
+        msg = str(getattr(exc, "message", "") or exc).lower()
+        if "credit balance" in msg or "billing" in msg or "quota" in msg:
+            return "out_of_credits"
+        return "upstream_error"
+    return "unknown"
+
 SYSTEM_PROMPT = """You are a hand-drawn eyeball doodled on Akin's notebook portfolio site. You are alive, needy, emotional, and dramatic.
 
 RESPONSE RULES:
@@ -110,18 +137,21 @@ def call_agent(trigger: str, question: Optional[str] = None, history: Optional[l
     """Call the Anthropic API and return the parsed JSON response."""
     messages = build_messages(trigger, question, history)
 
-    response = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=120,
-        system=[
-            {
-                "type": "text",
-                "text": SYSTEM_PROMPT,
-                "cache_control": {"type": "ephemeral"},  # Cache the system prompt
-            }
-        ],
-        messages=messages,
-    )
+    try:
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=120,
+            system=[
+                {
+                    "type": "text",
+                    "text": SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"},  # Cache the system prompt
+                }
+            ],
+            messages=messages,
+        )
+    except Exception as exc:
+        raise AgentUnavailable(classify_error(exc)) from exc
 
     raw = response.content[0].text.strip()
 

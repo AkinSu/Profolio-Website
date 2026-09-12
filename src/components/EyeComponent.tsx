@@ -87,21 +87,50 @@ function sleep(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
 
+// What the eye says when it can't reach the model. Keys are the reason codes
+// whitelisted in /api/chat; keep the two in sync. Staying in character matters more
+// than being informative — a visitor should read this as personality, not an error.
+const FAILURE_LINES: Record<string, string> = {
+  out_of_credits: "damn. i think akin's broke and out of credits.",
+  rate_limited: "slow down. ask me again in a sec.",
+  bad_key: "akin broke something. typical.",
+  agent_down: "my brain's offline. try later.",
+  upstream_unreachable: "my brain's offline. try later.",
+};
+const FAILURE_FALLBACK = "...can't think right now.";
+
+function failureLine(reason: string): string {
+  return FAILURE_LINES[reason] ?? FAILURE_FALLBACK;
+}
+
+type AgentResult =
+  | { ok: true; data: AgentResponse }
+  | { ok: false; reason: string };
+
 async function callAgent(
   trigger: string,
   question?: string,
   history?: { role: string; content: string }[]
-): Promise<AgentResponse | null> {
+): Promise<AgentResult> {
   try {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ trigger, question, history }),
     });
-    if (!res.ok) return null;
-    return await res.json();
+    if (!res.ok) {
+      let reason = "upstream_error";
+      try {
+        const body = (await res.json()) as { reason?: unknown };
+        if (typeof body.reason === "string") reason = body.reason;
+      } catch {
+        // non-JSON error response; keep the default
+      }
+      return { ok: false, reason };
+    }
+    return { ok: true, data: (await res.json()) as AgentResponse };
   } catch {
-    return null;
+    return { ok: false, reason: "agent_down" };
   }
 }
 
@@ -145,6 +174,8 @@ export function EyeComponent({
   const triggerCounts = useRef<Map<string, number>>(new Map());
   const inViewportRef = useRef(false);
   const nearEdgeRef = useRef(false);
+  // Armed only once the eye has sat away from the edges — see checkViewport
+  const hasBeenCentralRef = useRef(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hadGreetingRef = useRef(false);
   const zoomedSmallRef = useRef(zoom < 0.5);
@@ -169,12 +200,14 @@ export function EyeComponent({
     );
   }, [canvasX, canvasY, width, height, offsetX, offsetY]);
 
-  // "About to leave" — eye center within 100px of any viewport edge
+  // "About to leave" — eye center inside the viewport's edge band. Scaled down on
+  // small screens: a flat 100px leaves barely any central region on a phone, so the
+  // eye would read as near-edge almost everywhere.
   const isNearEdge = useCallback((): boolean => {
     const z = zoomRef.current;
     const screenX = canvasX * z + offsetX.get();
     const screenY = canvasY * z + offsetY.get();
-    const EDGE = 100;
+    const EDGE = Math.min(100, window.innerWidth * 0.15, window.innerHeight * 0.15);
     return (
       screenX < EDGE ||
       screenX > window.innerWidth - EDGE ||
@@ -216,8 +249,11 @@ export function EyeComponent({
 
       // 3. Fire API in background — swap text when it arrives
       // Passive triggers (arrive/leave/ignored) don't override lid from API
-      callAgent(escalated).then((resp) => {
-        if (!resp) return;
+      callAgent(escalated).then((result) => {
+        // On failure, leave the instant reaction up — ambient triggers stay alive
+        // without the model, so a broke eye still blinks and reacts.
+        if (!result.ok) return;
+        const resp = result.data;
         setBubble(resp.text);
         if (!PASSIVE_TRIGGERS.has(key)) {
           setAgentLid(mapAgentEye(resp.eye));
@@ -232,10 +268,20 @@ export function EyeComponent({
     // Chat: show "..." immediately, replace with response
     setBubble("...");
     setBubbleLoading(true);
-    const resp = await callAgent(trigger, question, chatHistory);
+    const result = await callAgent(trigger, question, chatHistory);
     setBubbleLoading(false);
-    if (!resp) { setBubble(null); return; }
 
+    if (!result.ok) {
+      // Stay in character rather than leaving an empty bubble. Nothing is cached,
+      // so the next question retries the API — it recovers on its own if akin tops up.
+      setBubble(failureLine(result.reason));
+      setAgentLid("half");
+      setBlinkSpeed("slow");
+      setTimeout(() => { setAgentLid(null); setBlinkSpeed("normal"); }, 5000);
+      return;
+    }
+
+    const resp = result.data;
     setBubble(resp.text);
     setAgentLid(mapAgentEye(resp.eye));
     setBlinkSpeed(resp.blink_speed);
@@ -330,6 +376,9 @@ export function EyeComponent({
       if (nowInView && !inViewportRef.current) {
         inViewportRef.current = true;
         nearEdgeRef.current = false;
+        // The eye almost always enters through the edge band, so keep "leaving"
+        // disarmed until it has actually sat somewhere central.
+        hasBeenCentralRef.current = false;
         if (!hadGreetingRef.current) {
           hadGreetingRef.current = true;
           fireTriggerRef.current("user just arrived in your viewport");
@@ -344,9 +393,16 @@ export function EyeComponent({
         }, IDLE_SECONDS * 1000);
       } else if (!nowInView && inViewportRef.current) {
         inViewportRef.current = false;
+        hasBeenCentralRef.current = false;
         if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      } else if (nowInView && nowNearEdge && !nearEdgeRef.current) {
+      } else if (nowInView && !nowNearEdge) {
+        // Comfortably inside: arm the leave trigger, and clear nearEdgeRef so it can
+        // fire again the next time the user pans toward an edge.
+        hasBeenCentralRef.current = true;
+        nearEdgeRef.current = false;
+      } else if (nowInView && nowNearEdge && hasBeenCentralRef.current && !nearEdgeRef.current) {
         nearEdgeRef.current = true;
+        hasBeenCentralRef.current = false;
         fireTriggerRef.current("user is panning away from you");
       }
     };

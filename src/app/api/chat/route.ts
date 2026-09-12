@@ -2,23 +2,146 @@ import { NextRequest, NextResponse } from "next/server";
 
 const AGENT_URL = process.env.AGENT_URL ?? "http://localhost:8000";
 
+// ─── Rate limiting ───
+// This endpoint spends real money on every call (it proxies to the Anthropic-backed
+// eye agent), and it is unauthenticated by design — visitors have no accounts.
+//
+// The map lives at module scope, so it persists for the life of a warm serverless
+// instance. Vercel may run several instances concurrently, so this is a PER-INSTANCE
+// cap, not a global one: a determined attacker spread across instances gets a
+// multiple of MAX_REQUESTS. It blunts scripted abuse rather than eliminating it.
+// For a hard global limit, move the counter to Upstash/Vercel KV or the existing
+// Neon database.
+
+const WINDOW_MS = 60_000;
+const MAX_REQUESTS = 15; // generous for a human; a script hits this in seconds
+const MAX_TRACKED = 5_000; // bound the map so it can't grow without limit
+
+const hits = new Map<string, { count: number; resetAt: number }>();
+
+function clientKey(req: NextRequest): string {
+  // Vercel sets x-forwarded-for; first entry is the originating client
+  const fwd = req.headers.get("x-forwarded-for");
+  if (fwd) return fwd.split(",")[0].trim();
+  return req.headers.get("x-real-ip") ?? "unknown";
+}
+
+function rateLimit(key: string): { ok: true } | { ok: false; retryAfter: number } {
+  const now = Date.now();
+
+  if (hits.size > MAX_TRACKED) {
+    for (const [k, v] of hits) if (now >= v.resetAt) hits.delete(k);
+  }
+
+  const rec = hits.get(key);
+  if (!rec || now >= rec.resetAt) {
+    hits.set(key, { count: 1, resetAt: now + WINDOW_MS });
+    return { ok: true };
+  }
+
+  rec.count++;
+  if (rec.count > MAX_REQUESTS) {
+    return { ok: false, retryAfter: Math.max(1, Math.ceil((rec.resetAt - now) / 1000)) };
+  }
+  return { ok: true };
+}
+
+// ─── Payload limits ───
+// `history` is supplied by the client and goes straight into the model's context,
+// so cap the entry count and each entry's size. Without this it's an open channel
+// for inflating token spend on someone else's bill.
+const MAX_BODY_BYTES = 16_000;
+const MAX_TRIGGER = 200;
+const MAX_QUESTION = 500;
+const MAX_HISTORY = 20;
+const MAX_HISTORY_CONTENT = 1_000;
+
+// Reason codes the agent may report. Anything outside this set is discarded, so a
+// compromised or misbehaving upstream can't push arbitrary text to the browser.
+const KNOWN_REASONS = new Set([
+  "out_of_credits",
+  "rate_limited",
+  "bad_key",
+  "upstream_error",
+  "upstream_unreachable",
+  "unknown",
+]);
+
+interface HistoryEntry {
+  role: string;
+  content: string;
+}
+
+function isHistoryEntry(m: unknown): m is HistoryEntry {
+  if (!m || typeof m !== "object") return false;
+  const o = m as Record<string, unknown>;
+  return typeof o.role === "string" && typeof o.content === "string";
+}
+
 export async function POST(req: NextRequest) {
+  const limit = rateLimit(clientKey(req));
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfter) } }
+    );
+  }
+
+  const raw = await req.text();
+  if (raw.length > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+  }
+
+  let body: { trigger?: unknown; question?: unknown; history?: unknown };
   try {
-    const body = await req.json();
+    body = JSON.parse(raw);
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const trigger =
+    typeof body.trigger === "string" ? body.trigger.slice(0, MAX_TRIGGER).trim() : "";
+  if (!trigger) {
+    return NextResponse.json({ error: "Missing trigger" }, { status: 400 });
+  }
+
+  const question =
+    typeof body.question === "string" ? body.question.slice(0, MAX_QUESTION) : undefined;
+
+  const history = Array.isArray(body.history)
+    ? body.history
+        .filter(isHistoryEntry)
+        .slice(-MAX_HISTORY)
+        .map((m) => ({ role: m.role, content: m.content.slice(0, MAX_HISTORY_CONTENT) }))
+    : undefined;
+
+  try {
     const res = await fetch(`${AGENT_URL}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ trigger, question, history }),
     });
+
     if (!res.ok) {
-      const err = await res.text();
-      return NextResponse.json({ error: err }, { status: res.status });
+      // Forward only a code from our own whitelist — never the upstream body,
+      // which can carry raw provider errors and agent internals.
+      let reason = "upstream_error";
+      try {
+        const body = (await res.json()) as { detail?: unknown };
+        if (typeof body.detail === "string" && KNOWN_REASONS.has(body.detail)) {
+          reason = body.detail;
+        }
+      } catch {
+        // non-JSON upstream response; keep the default
+      }
+      return NextResponse.json({ error: "Agent error", reason }, { status: res.status });
     }
-    const data = await res.json();
-    return NextResponse.json(data);
-  } catch (e) {
+
+    return NextResponse.json(await res.json());
+  } catch {
+    // Couldn't reach the agent at all — it's asleep, redeploying, or misconfigured
     return NextResponse.json(
-      { error: "Agent unavailable" },
+      { error: "Agent unavailable", reason: "agent_down" },
       { status: 503 }
     );
   }
