@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback, useMemo } from "react";
+import { useRef, useState, useEffect, useCallback, useMemo, type CSSProperties } from "react";
 import { motion, useMotionValue, animate } from "framer-motion";
 import { Navigation } from "@/components/Navigation";
 import { IntroAnimation } from "@/components/IntroAnimation";
@@ -25,6 +25,7 @@ import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { AdminLogin } from "@/components/AdminLogin";
 import { uploadFiles } from "@/lib/uploadthing";
 import { compressStroke } from "@/lib/strokeCompression";
+import { randomUUID } from "@/lib/uuid";
 
 const NOTE_COLORS = ['#FFF176', '#F48FB1', '#90CAF9', '#A5D6A7', '#FFCC80', '#CE93D8'];
 function randomNoteColor() { return NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)]; }
@@ -54,6 +55,37 @@ function getDefaultZoom(): number {
   const zoomH = (window.innerHeight - pad) / areaH;
   const z = Math.min(zoomW, zoomH);
   return Math.min(1, Math.max(MIN_ZOOM, z));
+}
+
+// ─── Ruled paper lines ───
+// Line visibility depends on DEVICE pixels, not CSS pixels. At dpr >= 2 (retina
+// laptops, phones) the 1px / 0.25-alpha band lands on 2-3 device pixels and reads
+// correctly — mobile has always looked right. At dpr 1 (most external desktop
+// monitors) it's a single pixel, and since panning puts it at a fractional offset
+// it antialiases across two rows at ~12% each. That is why desktops saw blank paper.
+//
+// Branch on dpr, not zoom. These values are read once at mount and never change,
+// so the lines stay perfectly static while panning and zooming.
+
+const RULE_SPACING = 32; // world px between lines
+const RULE_RGB = '140,180,220';
+
+/** Ruled-line background, tuned for the display's pixel density. */
+function getRuleStyle(dpr: number): CSSProperties {
+  // 1.5px at dpr 1 also stops browsers that snap gradient stops to whole
+  // device pixels from rounding the band away to nothing.
+  const band = dpr >= 2 ? 1 : 1.5;
+  const alpha = dpr >= 2 ? 0.25 : 0.42;
+  const rule = `rgba(${RULE_RGB},${alpha})`;
+  const start = RULE_SPACING - band;
+
+  return {
+    backgroundImage:
+      `repeating-linear-gradient(transparent, transparent ${start}px, ` +
+      `${rule} ${start}px, ${rule} ${RULE_SPACING}px)`,
+    backgroundSize: `100% ${RULE_SPACING}px`,
+    backgroundPosition: '0 48px',
+  };
 }
 
 // Visitor drawing persist zone (the big rectangle in the bottom-right)
@@ -99,7 +131,7 @@ export default function HomeContent() {
   const [activeCursor, setActiveCursor] = useState<string | null>(null);
   const pencilActiveRef = useRef(false);
   // Stable ID for this browser session — groups all drawings made in one visit
-  const sessionIdRef = useRef(typeof crypto !== 'undefined' ? crypto.randomUUID() : '');
+  const sessionIdRef = useRef(randomUUID());
   const [isUploading, setIsUploading] = useState(false);
   const [drawMode, setDrawMode] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -153,7 +185,7 @@ export default function HomeContent() {
       const drawingData = compressStroke(stroke.points, canvasYOffset, canvasXOffset);
       if (!drawingData) return;
       addElement({
-        id: crypto.randomUUID(), type: 'drawing', z_index: 3,
+        id: randomUUID(), type: 'drawing', z_index: 3,
         data: { ...drawingData, sessionId: sessionIdRef.current } as unknown as Record<string, unknown>,
       }, true);
       return;
@@ -167,7 +199,7 @@ export default function HomeContent() {
       const drawingData = compressStroke(stroke.points, canvasYOffset, canvasXOffset);
       if (drawingData) {
         addElement({
-          id: crypto.randomUUID(), type: 'drawing', z_index: 3,
+          id: randomUUID(), type: 'drawing', z_index: 3,
           data: { ...drawingData, sessionId: sessionIdRef.current } as unknown as Record<string, unknown>,
         }, false);
       }
@@ -178,7 +210,7 @@ export default function HomeContent() {
       const drawingData = compressStroke(seg, canvasYOffset, canvasXOffset);
       if (!drawingData) continue;
       addElement({
-        id: crypto.randomUUID(), type: 'drawing', z_index: 3,
+        id: randomUUID(), type: 'drawing', z_index: 3,
         data: { ...drawingData, sessionId: sessionIdRef.current } as unknown as Record<string, unknown>,
       }, true);
     }
@@ -231,10 +263,15 @@ export default function HomeContent() {
     [elements]
   );
 
+  // Read once at mount. No zoom input, so the ruled lines never shift or rebuild
+  // while panning or zooming — they behave like ink printed on the paper.
+  const [dpr] = useState(() => (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 2));
+  const ruleStyle = useMemo(() => getRuleStyle(dpr), [dpr]);
+
   // ─── Add handlers ───
 
   const handleAddNote = useCallback((x: number, y: number) => {
-    const id = crypto.randomUUID();
+    const id = randomUUID();
     addElement({
       id, type: 'sticky_note', z_index: 10,
       data: {
@@ -248,7 +285,7 @@ export default function HomeContent() {
   }, [addElement]);
 
   const handleAddText = useCallback((x: number, y: number) => {
-    const id = crypto.randomUUID();
+    const id = randomUUID();
     addElement({
       id, type: 'text', z_index: 5,
       data: {
@@ -260,7 +297,7 @@ export default function HomeContent() {
   }, [addElement]);
 
   const handleAddTextButton = useCallback((x: number, y: number) => {
-    const id = crypto.randomUUID();
+    const id = randomUUID();
     addElement({
       id, type: 'text_button', z_index: 5,
       data: {
@@ -284,7 +321,7 @@ export default function HomeContent() {
         const cy = (-offsetY.get() + window.innerHeight / 2) / zoomRef.current;
         const displayWidth = 300;
         const displayHeight = (img.naturalHeight / img.naturalWidth) * displayWidth;
-        const id = crypto.randomUUID();
+        const id = randomUUID();
         addElement({
           id, type: 'image', z_index: 8,
           data: {
@@ -315,7 +352,7 @@ export default function HomeContent() {
         const cy = (-offsetY.get() + window.innerHeight / 2) / zoomRef.current;
         const displayWidth = 200;
         const displayHeight = (img.naturalHeight / img.naturalWidth) * displayWidth;
-        const id = crypto.randomUUID();
+        const id = randomUUID();
         addElement({
           id, type: 'image_button', z_index: 8,
           data: {
@@ -928,18 +965,17 @@ export default function HomeContent() {
             willChange: "transform",
           }}
         >
-          {/* Blue ruled lines — inside motion.div so they scale with content */}
+          {/* Blue ruled lines — inside motion.div so they scale with content.
+              Band and alpha are fixed per display density; see getRuleStyle. */}
           <div
             style={{
               position: "absolute",
               top: -3000,
               left: 0,
-              width: 99999,
+              width: 6000,
               height: 9000,
               pointerEvents: "none",
-              backgroundImage: "repeating-linear-gradient(transparent, transparent 31px, rgba(140,180,220,0.25) 31px, rgba(140,180,220,0.25) 32px)",
-              backgroundSize: "100% 32px",
-              backgroundPosition: "0 48px",
+              ...ruleStyle,
               zIndex: 0,
             }}
           />
@@ -964,7 +1000,7 @@ export default function HomeContent() {
               position: "absolute",
               top: -2000,
               left: 0,
-              width: 99999,
+              width: 6000,
               height: 224,
               backgroundColor: "#f5f5f0",
               pointerEvents: "none",
