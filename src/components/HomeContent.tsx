@@ -135,8 +135,6 @@ export default function HomeContent() {
   const [isUploading, setIsUploading] = useState(false);
   const [drawMode, setDrawMode] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [eyeLid, setEyeLid] = useState<LidState>('open');
-  const eyeBlinkingRef = useRef(false);
   // Per-eye shutdown state — null means normal, "half" = slowly closing, "closed" = shut forever
   const [leftShut, setLeftShut] = useState<LidState | null>(null);
   const [rightShut, setRightShut] = useState<LidState | null>(null);
@@ -555,37 +553,6 @@ export default function HomeContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── Shared eye blink loop — stops permanently when shutdown ───
-  useEffect(() => {
-    if (isShutdown) return;
-    let cancelled = false;
-    const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
-    const doBlink = async () => {
-      if (eyeBlinkingRef.current) return;
-      eyeBlinkingRef.current = true;
-      setEyeLid('half');
-      await sleep(80);
-      if (cancelled) return;
-      setEyeLid('closed');
-      await sleep(80);
-      if (cancelled) return;
-      setEyeLid('half');
-      await sleep(80);
-      if (cancelled) return;
-      setEyeLid('open');
-      eyeBlinkingRef.current = false;
-    };
-    const schedule = () => {
-      const delay = 6000 + Math.random() * 8000;
-      setTimeout(async () => {
-        if (cancelled) return;
-        await doBlink();
-        if (!cancelled) schedule();
-      }, delay);
-    };
-    schedule();
-    return () => { cancelled = true; };
-  }, [isShutdown]);
 
   // ─── Per-eye shutdown click handlers ───
   // First click → squint. Second click while squinting → close permanently.
@@ -1062,7 +1029,6 @@ export default function HomeContent() {
             offsetX={offsetX}
             offsetY={offsetY}
             zoom={zoom}
-            lidState={eyeLid}
             shutState={leftShut}
             onShutClick={!isShutdown ? handleLeftShutClick : undefined}
             isShutdown={isShutdown}
@@ -1078,7 +1044,6 @@ export default function HomeContent() {
             offsetY={offsetY}
             zoom={zoom}
             flipped
-            lidState={eyeLid}
             shutState={rightShut}
             onShutClick={!isShutdown ? handleRightShutClick : undefined}
             isShutdown={isShutdown}
