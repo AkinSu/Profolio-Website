@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "@neondatabase/serverless": "^1.0.2",
     "@uploadthing/react": "^7.3.3",
     "@vercel/analytics": "^2.0.0",

@@ -16,7 +16,7 @@ import { CanvasImageButton } from "@/components/CanvasImageButton";
 import { CanvasTextButtonData, CanvasImageButtonData } from "@/hooks/useCanvasButtons";
 import { PencilCanvas, PencilStroke, CANVAS_Y_OFFSET } from "@/components/PencilCanvas";
 import { DrawingElement, DrawingElementData } from "@/components/DrawingElement";
-import { EyeComponent, LidState } from "@/components/EyeComponent";
+import { EyeComponent, LidState, pokeLine, PokeKind } from "@/components/EyeComponent";
 import { DrawingGroupOverlay } from "@/components/DrawingElement";
 import { PersistZoneBorder } from "@/components/PersistZoneBorder";
 import { MobilePencilFAB } from "@/components/MobilePencilFAB";
@@ -135,8 +135,6 @@ export default function HomeContent() {
   const [isUploading, setIsUploading] = useState(false);
   const [drawMode, setDrawMode] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [eyeLid, setEyeLid] = useState<LidState>('open');
-  const eyeBlinkingRef = useRef(false);
   // Per-eye shutdown state — null means normal, "half" = slowly closing, "closed" = shut forever
   const [leftShut, setLeftShut] = useState<LidState | null>(null);
   const [rightShut, setRightShut] = useState<LidState | null>(null);
@@ -149,6 +147,14 @@ export default function HomeContent() {
   const leftSquintStartRef = useRef(0);
   const rightSquintStartRef = useRef(0);
   const isShutdown = leftShut === 'closed' && rightShut === 'closed';
+  // Poke dialogue, rendered by the primary eye. The id forces a re-fire even when
+  // the same line comes up twice.
+  const [pokeMessage, setPokeMessage] = useState<{ text: string; id: number } | null>(null);
+  const pokeIdRef = useRef(0);
+  const sayPoke = useCallback((kind: PokeKind) => {
+    pokeIdRef.current += 1;
+    setPokeMessage({ text: pokeLine(kind), id: pokeIdRef.current });
+  }, []);
   const [zoom, setZoom] = useState(() => getDefaultZoom());
   const zoomRef = useRef(getDefaultZoom());
   const zoomMV = useMotionValue(getDefaultZoom()); // GPU-driven zoom for smooth transforms
@@ -555,37 +561,6 @@ export default function HomeContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── Shared eye blink loop — stops permanently when shutdown ───
-  useEffect(() => {
-    if (isShutdown) return;
-    let cancelled = false;
-    const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
-    const doBlink = async () => {
-      if (eyeBlinkingRef.current) return;
-      eyeBlinkingRef.current = true;
-      setEyeLid('half');
-      await sleep(80);
-      if (cancelled) return;
-      setEyeLid('closed');
-      await sleep(80);
-      if (cancelled) return;
-      setEyeLid('half');
-      await sleep(80);
-      if (cancelled) return;
-      setEyeLid('open');
-      eyeBlinkingRef.current = false;
-    };
-    const schedule = () => {
-      const delay = 6000 + Math.random() * 8000;
-      setTimeout(async () => {
-        if (cancelled) return;
-        await doBlink();
-        if (!cancelled) schedule();
-      }, delay);
-    };
-    schedule();
-    return () => { cancelled = true; };
-  }, [isShutdown]);
 
   // ─── Per-eye shutdown click handlers ───
   // First click → squint. Second click while squinting → close permanently.
@@ -598,16 +573,19 @@ export default function HomeContent() {
       if (leftTimerRef.current) clearTimeout(leftTimerRef.current);
       leftPhaseRef.current = 'closed';
       setLeftShut('closed');
+      // If the other eye is already gone, this one blinds it completely
+      sayPoke(rightPhaseRef.current === 'closed' ? 'blind' : 'closed');
       return;
     }
     leftPhaseRef.current = 'squinting';
     leftSquintStartRef.current = Date.now();
     setLeftShut('half');
+    sayPoke('poke');
     leftTimerRef.current = setTimeout(() => {
       leftPhaseRef.current = 'open';
       setLeftShut(null);
     }, 3000);
-  }, []);
+  }, [sayPoke]);
 
   const handleRightShutClick = useCallback(() => {
     if (rightPhaseRef.current === 'closed') return;
@@ -616,16 +594,19 @@ export default function HomeContent() {
       if (rightTimerRef.current) clearTimeout(rightTimerRef.current);
       rightPhaseRef.current = 'closed';
       setRightShut('closed');
+      // If the other eye is already gone, this one blinds it completely
+      sayPoke(leftPhaseRef.current === 'closed' ? 'blind' : 'closed');
       return;
     }
     rightPhaseRef.current = 'squinting';
     rightSquintStartRef.current = Date.now();
     setRightShut('half');
+    sayPoke('poke');
     rightTimerRef.current = setTimeout(() => {
       rightPhaseRef.current = 'open';
       setRightShut(null);
     }, 3000);
-  }, []);
+  }, [sayPoke]);
 
   // ─── Keep cached default zoom up to date on resize/orientation change ───
   useEffect(() => {
@@ -1062,8 +1043,8 @@ export default function HomeContent() {
             offsetX={offsetX}
             offsetY={offsetY}
             zoom={zoom}
-            lidState={eyeLid}
             shutState={leftShut}
+            pokeMessage={pokeMessage}
             onShutClick={!isShutdown ? handleLeftShutClick : undefined}
             isShutdown={isShutdown}
             isMobile={isMobile}
@@ -1078,7 +1059,6 @@ export default function HomeContent() {
             offsetY={offsetY}
             zoom={zoom}
             flipped
-            lidState={eyeLid}
             shutState={rightShut}
             onShutClick={!isShutdown ? handleRightShutClick : undefined}
             isShutdown={isShutdown}

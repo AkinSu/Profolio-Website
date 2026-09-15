@@ -26,9 +26,10 @@ interface EyeProps {
   offsetY: MotionValue<number>;
   zoom: number;
   flipped?: boolean;
-  lidState?: LidState;
   shutState?: LidState | null;
   primary?: boolean;
+  /** Set by HomeContent's click handlers; id changes on every poke */
+  pokeMessage?: { text: string; id: number } | null;
   onShutClick?: () => void;
   isShutdown?: boolean;
   isMobile?: boolean;
@@ -46,13 +47,6 @@ const RY = 8;
 const TRIGGER_COOLDOWN_MS = 30_000;
 const IDLE_SECONDS = 20;
 
-// Map agent "eye" field → valid LidState
-function mapAgentEye(eye: string): LidState {
-  if (eye === "closed") return "closed";
-  if (eye === "half" || eye === "squint") return "half";
-  return "open"; // "open", "wide", or anything else
-}
-
 function triggerKey(trigger: string): string {
   if (trigger.includes("arrived") || trigger.includes("viewport") || trigger.includes("came back")) return "arrive";
   if (trigger.includes("panning away") || trigger.includes("leaving")) return "leave";
@@ -61,10 +55,6 @@ function triggerKey(trigger: string): string {
   if (trigger.includes("zoomed")) return "zoom";
   return trigger;
 }
-
-// Triggers that should NOT override eye lid from API response
-const PASSIVE_TRIGGERS = new Set(["arrive", "leave", "ignored"]);
-
 
 function ordinal(n: number): string {
   if (n === 1) return "1st";
@@ -87,6 +77,81 @@ function sleep(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
 
+// ─── Blink coordinator ───
+// One loop drives both eyes so they stay in sync. It deliberately lives outside
+// React: the previous version held lid state in HomeContent, so every blink
+// re-rendered the entire canvas four times inside 240ms — that was the stutter.
+// Subscribers swap img.src directly and nothing re-renders.
+
+type BlinkPhase = "rest" | "mid" | "shut";
+
+// Real eyelids snap shut and drift back open, so closing is quicker than opening.
+const BLINK_CLOSING_MS = 55;
+const BLINK_SHUT_MS = 35;
+const BLINK_OPENING_MS = 95;
+// People blink every few seconds, in irregular clusters rather than on a metronome.
+const BLINK_GAP_MIN_MS = 2800;
+const BLINK_GAP_JITTER_MS = 2700;
+const DOUBLE_BLINK_CHANCE = 0.12;
+
+const blinkListeners = new Set<(phase: BlinkPhase) => void>();
+let blinkLoopRunning = false;
+
+function emitBlink(phase: BlinkPhase) {
+  for (const listener of blinkListeners) listener(phase);
+}
+
+async function oneBlink() {
+  emitBlink("mid");
+  await sleep(BLINK_CLOSING_MS);
+  emitBlink("shut");
+  await sleep(BLINK_SHUT_MS);
+  emitBlink("mid");
+  await sleep(BLINK_OPENING_MS);
+  emitBlink("rest");
+}
+
+async function blinkLoop() {
+  while (blinkListeners.size > 0) {
+    await sleep(BLINK_GAP_MIN_MS + Math.random() * BLINK_GAP_JITTER_MS);
+    if (blinkListeners.size === 0) break;
+    await oneBlink();
+    if (Math.random() < DOUBLE_BLINK_CHANCE) {
+      await sleep(140);
+      await oneBlink();
+    }
+  }
+  blinkLoopRunning = false;
+}
+
+function subscribeBlink(fn: (phase: BlinkPhase) => void): () => void {
+  blinkListeners.add(fn);
+  if (!blinkLoopRunning) {
+    blinkLoopRunning = true;
+    void blinkLoop();
+  }
+  return () => {
+    blinkListeners.delete(fn);
+  };
+}
+
+/**
+ * What the lid shows right now.
+ *
+ * `resting` is where the eye sits between blinks — "open" normally, "half" while
+ * squinting from a click, "closed" once it has been shut for good.
+ *
+ * An eye that's been shut for good never blinks. A squinting one still does, but it
+ * blinks relative to the squint: half -> closed -> half, returning to the squint
+ * rather than to open, until the squint timer releases it.
+ */
+function resolveLid(resting: LidState, phase: BlinkPhase): LidState {
+  if (resting === "closed") return "closed";
+  if (phase === "shut") return "closed";
+  if (phase === "mid") return "half";
+  return resting;
+}
+
 // What the eye says when it can't reach the model. Keys are the reason codes
 // whitelisted in /api/chat; keep the two in sync. Staying in character matters more
 // than being informative — a visitor should read this as personality, not an error.
@@ -98,6 +163,56 @@ const FAILURE_LINES: Record<string, string> = {
   upstream_unreachable: "my brain's offline. try later.",
 };
 const FAILURE_FALLBACK = "...can't think right now.";
+
+// ─── Getting poked ───
+// Fired by the click handlers in HomeContent, not by the model, so these always
+// work — even with no API key and no credits.
+
+export type PokeKind = "poke" | "closed" | "blind";
+
+const POKE_LINES: Record<PokeKind, string[]> = {
+  // Jabbed once — the eye squints
+  poke: [
+    "OUCH!!",
+    "MY EYEEE!!",
+    "dear GOD, stop!!",
+    "what did I DO to you???",
+    "DUDE. i didn't do ANYTHING?!",
+    "AGH— WHY?!",
+    "that's my EYE. my EYE!!",
+    "stop?! STOP!! please??",
+    "i— OW. OW!!",
+    "WHY would you do that",
+  ],
+  // Poked twice — that eye is shut for good
+  closed: [
+    "okay THAT one's gone. happy??",
+    "you BLINDED it!! half BLIND!!",
+    "one eye DOWN?! one to GO???",
+    "it's OVER for that one. OVER!!",
+  ],
+  // Both eyes shut — total darkness
+  blind: [
+    "i CAN'T see?! i CAN'T SEE!! please— call 911!!",
+    "DARKNESS. it's all DARKNESS!! somebody call 911!!",
+  ],
+};
+
+let lastPokeLine = "";
+
+/** Pick a line, never the same one twice in a row. */
+export function pokeLine(kind: PokeKind): string {
+  const options = POKE_LINES[kind];
+  const fresh = options.filter((l) => l !== lastPokeLine);
+  const pick = (fresh.length ? fresh : options)[
+    Math.floor(Math.random() * (fresh.length ? fresh.length : options.length))
+  ];
+  lastPokeLine = pick;
+  return pick;
+}
+
+// How long a poke line stays on screen
+const POKE_BUBBLE_MS = 4000;
 
 function failureLine(reason: string): string {
   return FAILURE_LINES[reason] ?? FAILURE_FALLBACK;
@@ -143,22 +258,19 @@ export function EyeComponent({
   offsetY,
   zoom,
   flipped = false,
-  lidState,
   shutState,
   primary = false,
+  pokeMessage,
   onShutClick,
   isShutdown = false,
   isMobile = false,
 }: EyeProps) {
   const pupilRef = useRef<HTMLImageElement>(null);
 
-  const [internalLid, setInternalLid] = useState<LidState>("open");
-  const lid = lidState ?? internalLid;
-  const isBlinkingRef = useRef(false);
-
-  // Agent-driven lid and blink (only applies when NOT in shutState)
-  const [agentLid, setAgentLid] = useState<LidState | null>(null);
-  const [blinkSpeed, setBlinkSpeed] = useState<BlinkSpeed>("normal");
+  const lidRef = useRef<HTMLImageElement>(null);
+  // Where the lid sits between blinks. Driven by the click easter egg, not the agent.
+  const restingRef = useRef<LidState>(shutState ?? "open");
+  const phaseRef = useRef<BlinkPhase>("rest");
   const [bubble, setBubble] = useState<string | null>(null);
   const [bubbleLoading, setBubbleLoading] = useState(false);
   const [mood, setMood] = useState<Mood>("idle");
@@ -166,8 +278,27 @@ export function EyeComponent({
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
 
-  // Priority: shutState > agentLid > lid
-  const activeLid = shutState != null ? shutState : (agentLid ?? lid);
+  // Push the current lid straight to the DOM — no re-render, so blinks stay smooth.
+  const applyLid = useCallback(() => {
+    const lid = resolveLid(restingRef.current, phaseRef.current);
+    if (lidRef.current) lidRef.current.src = LID_SRC[lid];
+    // The pupil is stacked above the lid, so it has to be hidden when fully shut.
+    if (pupilRef.current) {
+      pupilRef.current.style.visibility = lid === "closed" ? "hidden" : "visible";
+    }
+  }, []);
+
+  // Squint state changes rarely (only on click), so a re-render here is fine.
+  useEffect(() => {
+    restingRef.current = shutState ?? "open";
+    applyLid();
+  }, [shutState, applyLid]);
+
+  // Blinks arrive from the shared loop and bypass React entirely.
+  useEffect(() => subscribeBlink((phase) => {
+    phaseRef.current = phase;
+    applyLid();
+  }), [applyLid]);
 
   const zoomRef = useRef(zoom);
   const triggerCooldowns = useRef<Map<string, number>>(new Map());
@@ -234,12 +365,6 @@ export function EyeComponent({
       if (instant) {
         const idx = Math.min(count - 1, instant.texts.length - 1);
         setBubble(instant.texts[idx]);
-        if (instant.eye !== null) {
-          setAgentLid(instant.eye);
-          setTimeout(() => setAgentLid(null), 5000);
-        }
-        setBlinkSpeed(instant.blink);
-        setTimeout(() => setBlinkSpeed("normal"), 5000);
       }
 
       // 2. Build escalated trigger message
@@ -247,19 +372,14 @@ export function EyeComponent({
         ? `${trigger} (${ordinal(count)} time)`
         : trigger;
 
-      // 3. Fire API in background — swap text when it arrives
-      // Passive triggers (arrive/leave/ignored) don't override lid from API
+      // 3. Fire API in background — swap the text in when it arrives.
+      // The lid is never touched here: agent-driven lids only ever moved the primary
+      // eye, which left one eye half-closed while the other stayed open.
       callAgent(escalated).then((result) => {
         // On failure, leave the instant reaction up — ambient triggers stay alive
         // without the model, so a broke eye still blinks and reacts.
         if (!result.ok) return;
-        const resp = result.data;
-        setBubble(resp.text);
-        if (!PASSIVE_TRIGGERS.has(key)) {
-          setAgentLid(mapAgentEye(resp.eye));
-          setBlinkSpeed(resp.blink_speed);
-          setTimeout(() => setAgentLid(null), 5000);
-        }
+        setBubble(result.data.text);
       });
 
       return;
@@ -275,17 +395,11 @@ export function EyeComponent({
       // Stay in character rather than leaving an empty bubble. Nothing is cached,
       // so the next question retries the API — it recovers on its own if akin tops up.
       setBubble(failureLine(result.reason));
-      setAgentLid("half");
-      setBlinkSpeed("slow");
-      setTimeout(() => { setAgentLid(null); setBlinkSpeed("normal"); }, 5000);
       return;
     }
 
     const resp = result.data;
     setBubble(resp.text);
-    setAgentLid(mapAgentEye(resp.eye));
-    setBlinkSpeed(resp.blink_speed);
-    setTimeout(() => setAgentLid(null), 5000);
 
     if (question) {
       setChatHistory((h) => [
@@ -295,6 +409,14 @@ export function EyeComponent({
       ]);
     }
   }, [primary, isShutdown, chatHistory]);
+
+  // Poke reactions come from the click handlers, so they work with no API at all
+  useEffect(() => {
+    if (!pokeMessage || !primary) return;
+    setBubble(pokeMessage.text);
+    const t = setTimeout(() => setBubble(null), POKE_BUBBLE_MS);
+    return () => clearTimeout(t);
+  }, [pokeMessage, primary]);
 
   // Cursor tracking
   useEffect(() => {
@@ -315,50 +437,6 @@ export function EyeComponent({
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, [canvasX, canvasY, offsetX, offsetY, isInViewport]);
 
-  // Internal blink loop (when not externally controlled)
-  useEffect(() => {
-    if (lidState !== undefined) return;
-    let cancelled = false;
-
-    const getDelay = () => {
-      if (blinkSpeed === "fast") return 800 + Math.random() * 1200;
-      if (blinkSpeed === "slow") return 8000 + Math.random() * 6000;
-      if (blinkSpeed === "none") return 99999;
-      return 6000 + Math.random() * 8000;
-    };
-
-    const doBlink = async () => {
-      if (isBlinkingRef.current) return;
-      isBlinkingRef.current = true;
-      setInternalLid("half");
-      await sleep(80);
-      if (cancelled) return;
-      setInternalLid("closed");
-      await sleep(80);
-      if (cancelled) return;
-      setInternalLid("half");
-      await sleep(80);
-      if (cancelled) return;
-      setInternalLid("open");
-      isBlinkingRef.current = false;
-    };
-
-    const schedule = () => {
-      setTimeout(async () => {
-        if (cancelled) return;
-        await doBlink();
-        if (!cancelled) schedule();
-      }, getDelay());
-    };
-
-    schedule();
-    return () => {
-      cancelled = true;
-      // If a blink was in progress when this effect re-ran, unstick the lid
-      isBlinkingRef.current = false;
-      setInternalLid("open");
-    };
-  }, [lidState, blinkSpeed]);
 
   // Viewport detection — stable via refs
   const fireTriggerRef = useRef(fireTrigger);
@@ -418,7 +496,6 @@ export function EyeComponent({
       unsubY();
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primary, isInViewport, isNearEdge, offsetX, offsetY]);
 
   // Zoom trigger — once when crossing below 0.5, resets above 0.7
@@ -453,7 +530,7 @@ export function EyeComponent({
   return (
     <>
       {/* Speech bubble — HTML canvas+div rendered directly in canvas space */}
-      {bubble && primary && !isShutdown && (
+      {bubble && primary && (
         <SpeechBubble
           text={bubble}
           eyeCanvasX={canvasX}
@@ -501,7 +578,8 @@ export function EyeComponent({
         }}
       >
         <img
-          src={LID_SRC[activeLid]}
+          ref={lidRef}
+          src={LID_SRC[shutState ?? "open"]}
           alt=""
           draggable={false}
           style={{
@@ -515,7 +593,8 @@ export function EyeComponent({
             pointerEvents: "none",
           }}
         />
-        {activeLid !== "closed" && (
+        {/* Always mounted — applyLid toggles visibility by ref so blinks don't re-render */}
+        {(
           <img
             ref={pupilRef}
             src="/eye_pupil_web.png"
