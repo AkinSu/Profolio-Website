@@ -28,6 +28,8 @@ interface EyeProps {
   flipped?: boolean;
   shutState?: LidState | null;
   primary?: boolean;
+  /** Set by HomeContent's click handlers; id changes on every poke */
+  pokeMessage?: { text: string; id: number } | null;
   onShutClick?: () => void;
   isShutdown?: boolean;
   isMobile?: boolean;
@@ -162,6 +164,56 @@ const FAILURE_LINES: Record<string, string> = {
 };
 const FAILURE_FALLBACK = "...can't think right now.";
 
+// ─── Getting poked ───
+// Fired by the click handlers in HomeContent, not by the model, so these always
+// work — even with no API key and no credits.
+
+export type PokeKind = "poke" | "closed" | "blind";
+
+const POKE_LINES: Record<PokeKind, string[]> = {
+  // Jabbed once — the eye squints
+  poke: [
+    "OUCH!!",
+    "MY EYEEE!!",
+    "dear GOD, stop!!",
+    "what did I DO to you???",
+    "DUDE. i didn't do ANYTHING?!",
+    "AGH— WHY?!",
+    "that's my EYE. my EYE!!",
+    "stop?! STOP!! please??",
+    "i— OW. OW!!",
+    "WHY would you do that",
+  ],
+  // Poked twice — that eye is shut for good
+  closed: [
+    "okay THAT one's gone. happy??",
+    "you BLINDED it!! half BLIND!!",
+    "one eye DOWN?! one to GO???",
+    "it's OVER for that one. OVER!!",
+  ],
+  // Both eyes shut — total darkness
+  blind: [
+    "i CAN'T see?! i CAN'T SEE!! please— call 911!!",
+    "DARKNESS. it's all DARKNESS!! somebody call 911!!",
+  ],
+};
+
+let lastPokeLine = "";
+
+/** Pick a line, never the same one twice in a row. */
+export function pokeLine(kind: PokeKind): string {
+  const options = POKE_LINES[kind];
+  const fresh = options.filter((l) => l !== lastPokeLine);
+  const pick = (fresh.length ? fresh : options)[
+    Math.floor(Math.random() * (fresh.length ? fresh.length : options.length))
+  ];
+  lastPokeLine = pick;
+  return pick;
+}
+
+// How long a poke line stays on screen
+const POKE_BUBBLE_MS = 4000;
+
 function failureLine(reason: string): string {
   return FAILURE_LINES[reason] ?? FAILURE_FALLBACK;
 }
@@ -208,6 +260,7 @@ export function EyeComponent({
   flipped = false,
   shutState,
   primary = false,
+  pokeMessage,
   onShutClick,
   isShutdown = false,
   isMobile = false,
@@ -357,6 +410,14 @@ export function EyeComponent({
     }
   }, [primary, isShutdown, chatHistory]);
 
+  // Poke reactions come from the click handlers, so they work with no API at all
+  useEffect(() => {
+    if (!pokeMessage || !primary) return;
+    setBubble(pokeMessage.text);
+    const t = setTimeout(() => setBubble(null), POKE_BUBBLE_MS);
+    return () => clearTimeout(t);
+  }, [pokeMessage, primary]);
+
   // Cursor tracking
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -469,7 +530,7 @@ export function EyeComponent({
   return (
     <>
       {/* Speech bubble — HTML canvas+div rendered directly in canvas space */}
-      {bubble && primary && !isShutdown && (
+      {bubble && primary && (
         <SpeechBubble
           text={bubble}
           eyeCanvasX={canvasX}
