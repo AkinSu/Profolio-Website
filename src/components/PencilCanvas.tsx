@@ -257,7 +257,7 @@ export function PencilCanvas({
       isDrawing.current = true;
       currentPoints.current = [pt];
       lastPoint.current = pt;
-      lastTime.current = performance.now();
+      lastTime.current = e.nativeEvent.timeStamp || performance.now();
 
       if (temp) {
         const ctx = temp.getContext("2d");
@@ -287,7 +287,10 @@ export function PencilCanvas({
         const x = (ev.clientX - rect.left) * (CW / rect.width);
         const y = (ev.clientY - rect.top) * (CH / rect.height);
 
-        const now = performance.now();
+        // Each coalesced event carries its own timestamp. Reading performance.now()
+        // here instead gave every event in a batch the same dt of ~0, which drove
+        // pressureFromSpeed to its 0.1 floor and made mouse strokes patchy.
+        const now = ev.timeStamp || performance.now();
         const dt = now - lastTime.current;
         const isMouse = ev.pointerType === "mouse";
 
@@ -347,6 +350,20 @@ export function PencilCanvas({
 
       if (currentPoints.current.length > 1 && onStrokeComplete) {
         onStrokeComplete({ points: [...currentPoints.current] });
+
+        // The stroke now belongs to a DrawingElement, which renders it at the same
+        // world coordinates. Keeping our copy too painted it twice and compounded the
+        // alpha (0.25 -> 0.44), so finished strokes visibly darkened. Drop our copy
+        // once the element has painted — two frames is enough for React to commit and
+        // for DrawingElement's effect to draw, and the committed layer bridges the gap
+        // in the meantime so nothing flickers.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const ctx = committedRef.current?.getContext("2d");
+            if (ctx) ctx.clearRect(0, 0, CW, CH);
+            needsRender.current = true;
+          });
+        });
       }
       currentPoints.current = [];
     },

@@ -503,7 +503,23 @@ export default function HomeContent() {
   const didPanRef = useRef(false);
   const lastMouseRef = useRef({ x: 0, y: 0 });
   const outerRef = useRef<HTMLDivElement>(null);
-  const [panLimitPos, setPanLimitPos] = useState<{ x: number; y: number } | null>(null);
+  // Driven entirely by ref. This used to be React state set on every pointermove,
+  // and since clampX pins maxX at 0 the default view already sits on the horizontal
+  // limit — so any rightward drag re-rendered the whole canvas 60-120x/second.
+  const panLimitDotRef = useRef<HTMLDivElement>(null);
+
+  const showPanLimit = useCallback((clientX: number, clientY: number) => {
+    const el = panLimitDotRef.current;
+    if (!el) return;
+    el.style.left = `${clientX + 20}px`;
+    el.style.top = `${clientY - 24}px`;
+    el.style.visibility = 'visible';
+  }, []);
+
+  const hidePanLimit = useCallback(() => {
+    const el = panLimitDotRef.current;
+    if (el) el.style.visibility = 'hidden';
+  }, []);
 
   const clampX = useCallback((ox: number, z: number) => {
     const maxX = 0;
@@ -766,16 +782,16 @@ export default function HomeContent() {
     offsetY.set(clampedY);
 
     if (rawX !== clampedX || rawY !== clampedY) {
-      setPanLimitPos({ x: e.clientX, y: e.clientY });
+      showPanLimit(e.clientX, e.clientY);
     } else {
-      setPanLimitPos(null);
+      hidePanLimit();
     }
 
   };
 
   const handlePointerUp = () => {
     isPanningRef.current = false;
-    setPanLimitPos(null);
+    hidePanLimit();
     if (outerRef.current) outerRef.current.style.cursor = getCursor();
   };
 
@@ -808,6 +824,37 @@ export default function HomeContent() {
       duration: 0.6,
       ease: "easeInOut",
       onUpdate: (v) => offsetY.set(v),
+    });
+  }, [offsetX, offsetY, clampX, clampY]);
+
+  /**
+   * Bring the viewport to the persist zone.
+   *
+   * On mobile the pencil canvas is only 3100x2200 and sits over the persist zone, to
+   * avoid the Safari OOM the full 8000x6000 caused. The default mobile view sits well
+   * to the left of it, so activating the pencil there put every touch on empty space.
+   * Landing the zone's top-left corner ~15% in also puts its border and "leave a mark"
+   * label on screen, so it reads as an invitation rather than a teleport.
+   */
+  const panToPersistZone = useCallback(() => {
+    const z = zoomRef.current;
+
+    // Don't yank someone who is already standing in the zone
+    const centerX = (window.innerWidth / 2 - offsetX.get()) / z;
+    const centerY = (window.innerHeight / 2 - offsetY.get()) / z;
+    if (
+      centerX >= PERSIST_ZONE.x1 && centerX <= PERSIST_ZONE.x2 &&
+      centerY >= PERSIST_ZONE.y1 && centerY <= PERSIST_ZONE.y2
+    ) return;
+
+    const targetX = clampX(window.innerWidth * 0.15 - PERSIST_ZONE.x1 * z, z);
+    const targetY = clampY(window.innerHeight * 0.15 - PERSIST_ZONE.y1 * z, z);
+
+    animate(offsetX.get(), targetX, {
+      duration: 0.6, ease: "easeInOut", onUpdate: (v) => offsetX.set(v),
+    });
+    animate(offsetY.get(), targetY, {
+      duration: 0.6, ease: "easeInOut", onUpdate: (v) => offsetY.set(v),
     });
   }, [offsetX, offsetY, clampX, clampY]);
 
@@ -896,17 +943,23 @@ export default function HomeContent() {
         {isMobile && !isAdmin && overlayDone && (
           <MobilePencilFAB
             isActive={activeCursor === 'pencil'}
-            onToggle={() => handleCursorChange(activeCursor === 'pencil' ? null : 'pencil')}
+            onToggle={() => {
+              const turningOn = activeCursor !== 'pencil';
+              handleCursorChange(turningOn ? 'pencil' : null);
+              if (turningOn) panToPersistZone();
+            }}
           />
         )}
 
-        {/* Pan limit indicator */}
-        {panLimitPos && (
+        {/* Pan limit indicator — always mounted, shown/positioned by ref */}
+        {(
           <div
+            ref={panLimitDotRef}
             style={{
               position: 'fixed',
-              left: panLimitPos.x + 20,
-              top: panLimitPos.y - 24,
+              left: 0,
+              top: 0,
+              visibility: 'hidden',
               zIndex: 99999,
               pointerEvents: 'none',
               userSelect: 'none',
